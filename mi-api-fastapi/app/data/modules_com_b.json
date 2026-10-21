@@ -1,0 +1,340 @@
+[
+  {
+    "slug": "contrasenas-seguras",
+    "title": "Contraseñas seguras y únicas",
+    "topic": "Credenciales",
+    "behavior_objective": "Usar una contraseña distinta y larga en cada cuenta importante, apoyándose en un gestor de contraseñas aprobado.",
+    "source": "PDF COM-B (módulo 1)",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Sé crear una contraseña o frase larga y distinta para cada cuenta importante."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Tengo acceso a un gestor de contraseñas aprobado o una alternativa segura."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Creo que dejar de reutilizar contraseñas reduce un riesgo real para mi trabajo."
+      }
+    ],
+    "micro_lesson": "Una filtración en un servicio puede permitir que atacantes prueben la misma clave en el correo corporativo. Usa frases largas, únicas y un gestor de contraseñas aprobado.",
+    "capacity_questions": [
+      {
+        "prompt": "Natalia usa la misma contraseña en su correo de trabajo y en una tienda online. La tienda sufre una filtración. ¿Cuál es el riesgo principal?",
+        "options": [
+          "Ninguno, porque son sitios distintos",
+          "Que prueben esa clave en el correo y otras cuentas",
+          "Solo perder datos de compras",
+          "Que la computadora se apague"
+        ],
+        "correct": 1,
+        "feedback": "Los atacantes prueban credenciales filtradas en otros servicios."
+      },
+      {
+        "prompt": "¿Cuál es la mejor opción?",
+        "options": [
+          "Lima2026!",
+          "Natalia1990",
+          "cafe-lluvia-bicicleta-nube",
+          "Qwerty123"
+        ],
+        "correct": 2,
+        "feedback": "Una frase larga y única suele ser mejor que una clave corta y predecible."
+      }
+    ],
+    "opportunity_question": "¿Qué te dificulta usar una contraseña distinta en cada cuenta?",
+    "motivation_question": "¿Qué daño podría causar que alguien tome control de tu correo corporativo?",
+    "real_action": "Configura o solicita acceso a un gestor de contraseñas y cambia al menos una contraseña reutilizada.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "phishing-enlaces",
+    "title": "Phishing y enlaces sospechosos",
+    "topic": "Phishing",
+    "behavior_objective": "Verificar remitente y enlace antes de hacer clic y reportar mensajes sospechosos.",
+    "source": "PDF COM-B (módulo 2)",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Puedo reconocer señales de urgencia, enlaces acortados y remitentes dudosos."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Sé exactamente dónde reportar un correo sospechoso en mi empresa."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Reportar un correo sospechoso me parece útil para proteger al resto del equipo."
+      }
+    ],
+    "micro_lesson": "Antes de hacer clic, revisa remitente, dominio, urgencia, adjuntos y destino real del enlace. Si algo no cuadra, no interactúes y repórtalo por el canal oficial.",
+    "capacity_questions": [
+      {
+        "prompt": "Recibes: 'Soporte TI: su cuenta será bloqueada en 1 hora. Ingrese aquí: bit.ly/xx12'. ¿Qué haces?",
+        "options": [
+          "Hago clic rápido",
+          "No hago clic y reporto",
+          "Lo reenvío a todos",
+          "Respondo pidiendo datos"
+        ],
+        "correct": 1,
+        "feedback": "Urgencia + enlace acortado + amenaza de bloqueo son señales de alerta."
+      }
+    ],
+    "opportunity_question": "¿Conoces y tienes disponible el canal para reportar phishing?",
+    "motivation_question": "¿En tu área se valora y agradece que alguien reporte un correo sospechoso?",
+    "real_action": "Ubica ahora el botón/correo de reporte y guárdalo como referencia.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "wifi-publica",
+    "title": "Uso seguro de redes Wi-Fi públicas",
+    "topic": "Conectividad",
+    "behavior_objective": "Evitar acceder a cuentas de trabajo desde Wi-Fi pública sin protección y usar datos móviles o VPN autorizada.",
+    "source": "PDF COM-B (módulo 3)",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Sé distinguir una red pública de una conexión más segura."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Tengo datos móviles o VPN corporativa cuando trabajo fuera de la oficina."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Estoy dispuesto a evitar una red gratis si no puedo confirmar que es segura."
+      }
+    ],
+    "micro_lesson": "Las redes abiertas o falsas pueden exponer tráfico y credenciales. Para trabajo sensible prioriza datos móviles o la VPN autorizada por la empresa.",
+    "capacity_questions": [
+      {
+        "prompt": "En un aeropuerto necesitas revisar el correo de trabajo. ¿Qué opción es más segura?",
+        "options": [
+          "Wi-Fi gratuito abierto",
+          "Datos móviles",
+          "Wi-Fi con nombre parecido y sin clave",
+          "Cualquier red con buena señal"
+        ],
+        "correct": 1,
+        "feedback": "Los datos móviles reducen la exposición frente a redes abiertas o falsas."
+      }
+    ],
+    "opportunity_question": "¿Tienes datos móviles suficientes o una VPN corporativa disponible?",
+    "motivation_question": "Cuando ves 'Wi-Fi Gratis', ¿tu reacción habitual es conectarte sin verificar?",
+    "real_action": "Comprueba si tienes instalada y operativa la VPN corporativa o define tu alternativa segura.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "codigos-2fa",
+    "title": "Códigos de seguridad y verificación en dos pasos",
+    "topic": "2FA",
+    "behavior_objective": "Nunca compartir códigos de verificación y activar 2FA en las cuentas de trabajo cuando esté disponible.",
+    "source": "PDF COM-B (módulo 4)",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Sé cómo activar la verificación en dos pasos en mi correo."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Mi dispositivo permite usar un segundo factor."
+      },
+      {
+        "code": "O2",
+        "dimension": "oportunidad",
+        "statement": "En mi área, usar 2FA se considera normal."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Creo que 2FA realmente me protege aunque roben mi contraseña."
+      }
+    ],
+    "micro_lesson": "Un código de verificación funciona como una llave temporal. No se comparte por llamada, chat o correo. Para validar una solicitud, corta el contacto y usa el canal oficial.",
+    "capacity_questions": [
+      {
+        "prompt": "Te llaman diciendo ser del banco y piden el código de 6 dígitos para 'evitar un bloqueo'. ¿Qué haces?",
+        "options": [
+          "Lo doy",
+          "Cuelgo y llamo al número oficial",
+          "Doy solo tres dígitos",
+          "Pido su nombre y luego lo doy"
+        ],
+        "correct": 1,
+        "feedback": "Nunca compartas códigos. Verifica por un canal oficial iniciado por ti."
+      }
+    ],
+    "opportunity_question": "¿Qué te impide activar 2FA hoy?",
+    "motivation_question": "¿Qué evita 2FA aunque alguien robe tu contraseña?",
+    "real_action": "Activa 2FA en tu cuenta corporativa o solicita ayuda si la empresa todavía no lo ofrece.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "vishing-verificacion",
+    "title": "Vishing e ingeniería social por llamadas",
+    "topic": "Ingeniería social",
+    "behavior_objective": "Interrumpir solicitudes urgentes por llamada y verificar la identidad mediante un canal oficial independiente.",
+    "source": "Propuesto a partir de la metodología COM-B del PDF",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Reconozco señales de presión, autoridad falsa y solicitud de secretos por llamada."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Tengo a mano los números y canales oficiales para verificar solicitudes sensibles."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Me siento con permiso de cortar una llamada aunque la persona diga ser un jefe o banco."
+      }
+    ],
+    "micro_lesson": "La urgencia y la autoridad aparente buscan que actúes sin verificar. Nunca entregues códigos, contraseñas ni datos sensibles. Cuelga y contacta tú mismo al canal oficial.",
+    "capacity_questions": [
+      {
+        "prompt": "Una persona que dice ser de soporte te pide instalar una herramienta remota de inmediato. ¿Qué haces primero?",
+        "options": [
+          "La instalo",
+          "Verifico la solicitud por el canal oficial",
+          "Le doy mi contraseña",
+          "Desactivo el antivirus"
+        ],
+        "correct": 1,
+        "feedback": "La verificación por un canal independiente rompe la presión de la ingeniería social."
+      }
+    ],
+    "opportunity_question": "¿Tu empresa publica canales oficiales claros para soporte, bancos o proveedores?",
+    "motivation_question": "¿Te resulta difícil decir 'no' cuando alguien invoca autoridad o urgencia?",
+    "real_action": "Guarda en tus contactos el número o canal oficial de soporte y define una frase de corte: 'Lo verificaré por el canal oficial'.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "actualizaciones-bloqueo",
+    "title": "Actualizaciones y bloqueo del dispositivo",
+    "topic": "Dispositivos",
+    "behavior_objective": "Instalar actualizaciones autorizadas y bloquear la pantalla cada vez que se deja el equipo sin supervisión.",
+    "source": "Propuesto a partir de la metodología COM-B del PDF",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Sé comprobar si mi equipo tiene actualizaciones pendientes y cómo bloquearlo rápidamente."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Tengo permisos o soporte para instalar actualizaciones autorizadas sin interrumpir mi trabajo."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Bloquear la pantalla al levantarme ya forma parte de mi rutina."
+      }
+    ],
+    "micro_lesson": "Actualizar corrige vulnerabilidades conocidas y bloquear la pantalla evita accesos físicos oportunistas. Usa solo mecanismos autorizados por la empresa.",
+    "capacity_questions": [
+      {
+        "prompt": "Debes alejarte dos minutos de tu laptop en una sala compartida. ¿Qué haces?",
+        "options": [
+          "La dejo abierta",
+          "Bloqueo la pantalla",
+          "Cierro solo el navegador",
+          "Bajo el brillo"
+        ],
+        "correct": 1,
+        "feedback": "El bloqueo de pantalla reduce el acceso no autorizado cuando el equipo queda solo."
+      }
+    ],
+    "opportunity_question": "¿Las actualizaciones se instalan automáticamente o tienes un canal claro para solicitar soporte?",
+    "motivation_question": "¿Qué señal o hábito te ayudaría a recordar bloquear la pantalla siempre?",
+    "real_action": "Activa el bloqueo automático permitido por la empresa y practica el atajo de bloqueo de tu sistema.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  },
+  {
+    "slug": "archivos-datos-sensibles",
+    "title": "Archivos, adjuntos e información sensible",
+    "topic": "Protección de información",
+    "behavior_objective": "Abrir adjuntos solo tras verificar su origen y compartir información sensible únicamente por canales corporativos autorizados.",
+    "source": "Propuesto a partir de la metodología COM-B del PDF",
+    "diagnostic": [
+      {
+        "code": "C1",
+        "dimension": "capacidad",
+        "statement": "Sé detectar un adjunto inesperado o una solicitud inusual de información."
+      },
+      {
+        "code": "O1",
+        "dimension": "oportunidad",
+        "statement": "Dispongo de un canal corporativo aprobado para compartir archivos sensibles."
+      },
+      {
+        "code": "M1",
+        "dimension": "motivacion",
+        "statement": "Prefiero verificar una solicitud antes que ahorrar unos minutos usando un canal no autorizado."
+      }
+    ],
+    "micro_lesson": "Los adjuntos pueden iniciar malware y los canales personales dificultan controlar quién recibe datos. Verifica remitente, contexto y usa repositorios corporativos autorizados.",
+    "capacity_questions": [
+      {
+        "prompt": "Recibes una factura inesperada en un archivo comprimido de un proveedor conocido. ¿Qué haces?",
+        "options": [
+          "La abro porque conozco al proveedor",
+          "Verifico por un canal conocido antes de abrir",
+          "La subo a mi correo personal",
+          "Desactivo protección para abrirla"
+        ],
+        "correct": 1,
+        "feedback": "Una cuenta legítima también puede estar comprometida. Verifica el contexto antes de abrir adjuntos inesperados."
+      }
+    ],
+    "opportunity_question": "¿Tienes acceso a una plataforma corporativa para compartir archivos de forma controlada?",
+    "motivation_question": "¿Qué te haría elegir el canal corporativo aunque sea menos rápido que una app personal?",
+    "real_action": "Identifica el repositorio corporativo autorizado y elimina un atajo inseguro que uses para compartir archivos.",
+    "reinforcement_days": [
+      7,
+      30,
+      90
+    ]
+  }
+]
