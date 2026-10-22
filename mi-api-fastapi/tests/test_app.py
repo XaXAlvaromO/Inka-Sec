@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from main import app
+from app.main import app
 
 client = TestClient(app)
 
@@ -12,7 +12,7 @@ def test_hello():
 
 
 def test_health():
-    res = client.get("/health")
+    res = client.get("/api/v1/health")
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "healthy"

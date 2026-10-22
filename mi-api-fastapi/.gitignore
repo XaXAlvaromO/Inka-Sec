@@ -3,7 +3,15 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
-
+.env.*
+!.env.example
+.venv/
+venv/
+dist/
+*.db
+ci.db
 # IDEs
 .vscode/settings.json
 .idea/
+node_modules/
+dist/
