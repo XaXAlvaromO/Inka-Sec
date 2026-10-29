@@ -1,0 +1,92 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+
+  backend:
+    name: Backend - Tests + SAST
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mi-api-fastapi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          pip install bandit
+
+      - name: Ejecutar pruebas
+        run: python -m pytest -q
+        env:
+          DATABASE_URL: sqlite:///./ci.db
+          JWT_SECRET_KEY: ci-testing-secret-not-for-production-123456789
+          SEED_DEMO_DATA: 'false'
+          AUTO_CREATE_TABLES: 'true'
+
+      - name: SAST con Bandit
+        run: bandit -r app -ll -ii
+
+
+  deploy-dev:
+    name: Deploy a Desarrollo
+    needs: backend
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy a Dev en Render
+        run: |
+          curl -fsS -X POST "${{ secrets.RENDER_DEV_HOOK }}"
+          echo "Deploy a Dev disparado"
+
+
+  smoke-test:
+    name: Smoke Test en Dev
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verificar que Dev responde
+        run: |
+          for i in {1..20}; do
+            STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
+              "${{ vars.RENDER_DEV_URL }}/api/v1/health" || true)
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Dev responde correctamente (HTTP $STATUS)"
+              exit 0
+            fi
+
+            echo "Intento $i fallido (HTTP $STATUS), reintentando..."
+            sleep 15
+          done
+
+          echo "Dev no responde correctamente"
+          exit 1
+
+
+  deploy-prod:
+    name: Deploy a Producción
+    needs: smoke-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy a Prod en Render
+        run: |
+          curl -fsS -X POST "${{ secrets.RENDER_PROD_HOOK }}"
+          echo "Deploy a Producción disparado"
