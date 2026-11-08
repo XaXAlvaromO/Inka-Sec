@@ -13,6 +13,10 @@ from app.models.models import Area, Company, LearningModule, ModuleProgress, Not
 
 
 def seed_demo():
+    # Se puede ejecutar a mano (python -m app.seed) aunque SEED_DEMO_DATA sea false:
+    # en producción crearía cuentas con correos conocidos y una contraseña compartida.
+    if settings.is_production:
+        raise RuntimeError("seed_demo está deshabilitado en producción")
     if not settings.demo_password:
         raise RuntimeError(
             "SEED_DEMO_DATA=true requiere DEMO_PASSWORD en backend/.env. "

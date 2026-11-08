@@ -6,6 +6,15 @@ on:
   push:
     branches: [main]
 
+# Mínimo privilegio: el token de GitHub de estos jobs solo puede leer el código.
+permissions:
+  contents: read
+
+# Nunca dos despliegues a la vez sobre la misma rama.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
 
   backend:
@@ -26,32 +35,59 @@ jobs:
           python-version: '3.13'
 
       - name: Instalar dependencias
-        run: |
-          pip install -r requirements.txt
-          pip install bandit
+        run: pip install -r requirements-dev.txt
 
+      # tests/conftest.py fija su propia configuración (SQLite en memoria y un secreto de prueba).
       - name: Ejecutar pruebas
         run: python -m pytest -q
-        env:
-          DATABASE_URL: sqlite:///./ci.db
-          JWT_SECRET_KEY: ci-testing-secret-not-for-production-123456789
-          SEED_DEMO_DATA: 'false'
-          AUTO_CREATE_TABLES: 'true'
 
       - name: SAST con Bandit
         run: bandit -r app -ll -ii
 
 
+  frontend:
+    name: Frontend - Lint + Build + Audit
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Auditar dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
+
+
   deploy-dev:
     name: Deploy a Desarrollo
-    needs: backend
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
+      # Los secretos van por variables de entorno, no interpolados dentro del script.
       - name: Deploy a Dev en Render
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEV_HOOK }}
         run: |
-          curl -fsS -X POST "${{ secrets.RENDER_DEV_HOOK }}"
+          curl -fsS -X POST "$RENDER_HOOK" > /dev/null
           echo "Deploy a Dev disparado"
 
 
@@ -62,10 +98,12 @@ jobs:
 
     steps:
       - name: Verificar que Dev responde
+        env:
+          DEV_URL: ${{ vars.RENDER_DEV_URL }}
         run: |
           for i in {1..20}; do
             STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
-              "${{ vars.RENDER_DEV_URL }}/api/v1/health" || true)
+              "$DEV_URL/api/v1/health" || true)
 
             if [ "$STATUS" = "200" ]; then
               echo "Dev responde correctamente (HTTP $STATUS)"
@@ -84,9 +122,12 @@ jobs:
     name: Deploy a Producción
     needs: smoke-test
     runs-on: ubuntu-latest
+    if: vars.RENDER_PROD_ENABLED == 'true'
 
     steps:
       - name: Deploy a Prod en Render
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_PROD_HOOK }}
         run: |
-          curl -fsS -X POST "${{ secrets.RENDER_PROD_HOOK }}"
+          curl -fsS -X POST "$RENDER_HOOK" > /dev/null
           echo "Deploy a Producción disparado"

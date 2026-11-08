@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete
 from app.db.session import SessionLocal
-from app.models.models import AuditLog, Notification
+from app.models.models import AuditLog
 from app.core.config import settings
 
 def run_once():

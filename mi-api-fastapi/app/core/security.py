@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, hashlib, hmac, os, struct, time
+import base64, binascii, hashlib, hmac, os, struct, time
 from datetime import datetime, timedelta, timezone
 import jwt
 from argon2 import PasswordHasher
@@ -23,7 +23,8 @@ def create_access_token(*, user_id: int, role: str, company_id: int) -> str:
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 def decode_access_token(token: str) -> dict:
-    return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    # Solo se acepta el algoritmo configurado (nunca "none") y los claims básicos son obligatorios.
+    return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm], options={"require": ["exp", "iat", "sub"]})
 
 def new_totp_secret() -> str:
     return base64.b32encode(os.urandom(20)).decode().rstrip("=")
@@ -31,6 +32,13 @@ def new_totp_secret() -> str:
 def _b32decode(secret: str) -> bytes:
     padded = secret + "=" * ((8 - len(secret) % 8) % 8)
     return base64.b32decode(padded, casefold=True)
+
+def is_valid_totp_secret(secret: str) -> bool:
+    """Base32 válido y con al menos 80 bits (RFC 4226 recomienda 160)."""
+    try:
+        return len(_b32decode(secret.strip())) >= 10
+    except (binascii.Error, ValueError):
+        return False
 
 def totp_code(secret: str, at_time: int | None = None, step: int = 30, digits: int = 6) -> str:
     counter = int((at_time or time.time()) // step)
@@ -41,5 +49,8 @@ def totp_code(secret: str, at_time: int | None = None, step: int = 30, digits: i
     return str(value).zfill(digits)
 
 def verify_totp(secret: str, code: str, window: int = 1) -> bool:
+    code = str(code)
+    if len(code) != 6 or not code.isdigit():
+        return False
     now = int(time.time())
-    return any(hmac.compare_digest(totp_code(secret, now + i*30), str(code).zfill(6)) for i in range(-window, window+1))
+    return any(hmac.compare_digest(totp_code(secret, now + i*30), code) for i in range(-window, window+1))
