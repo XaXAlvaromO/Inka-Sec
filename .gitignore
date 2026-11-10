@@ -1,0 +1,20 @@
+# Secretos: nunca se suben al repositorio
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.db
+
+# Node / Vite
+node_modules/
+dist/
+
+# IDEs
+.vscode/settings.json
+.idea/

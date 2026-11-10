@@ -2,7 +2,22 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.models import User
+from app.core.config import settings
 from app.core.security import decode_access_token
+
+def client_ip(request: Request) -> str:
+    """IP real del cliente.
+
+    X-Forwarded-For solo se usa si hay proxies de confianza configurados, y se toma
+    la entrada que agregó el proxy (contando desde la derecha). Las entradas de la
+    izquierda las escribe el cliente y se pueden falsificar para evadir el rate limit.
+    """
+    hops = settings.trusted_proxy_hops
+    if hops:
+        forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",") if part.strip()]
+        if len(forwarded) >= hops:
+            return forwarded[-hops][:64]
+    return request.client.host[:64] if request.client else "unknown"
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     token = request.cookies.get("inka_access")

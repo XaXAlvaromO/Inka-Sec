@@ -1,18 +1,16 @@
-from sqlalchemy import select
-
 from app.core.config import settings
 from app.core.security import totp_code
 from app.db.session import SessionLocal
-from app.models.models import User
+from app.repositories.user_repository import get_by_email
 
 
 def main(email: str):
-    if settings.app_env.lower() == "production":
+    if settings.is_production:
         raise SystemExit("dev_totp está deshabilitado en producción")
 
     db = SessionLocal()
     try:
-        user = db.scalar(select(User).where(User.email == email.lower().strip()))
+        user = get_by_email(db, email)
         if not user:
             raise SystemExit("Usuario no encontrado")
         if not user.totp_secret:

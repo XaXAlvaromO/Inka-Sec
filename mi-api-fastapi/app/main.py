@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.db.session import Base, engine
 from app import models  # noqa: F401
 from app.seed import seed_demo
-from app.core.middleware import SecurityHeadersMiddleware, LoginRateLimitMiddleware, CSRFMiddleware
+from app.core.middleware import SecurityHeadersMiddleware, AuthRateLimitMiddleware, CSRFMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,11 +16,15 @@ async def lifespan(app: FastAPI):
         seed_demo()
     yield
 
-app=FastAPI(title=settings.app_name,version="1.0.0",lifespan=lifespan)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(LoginRateLimitMiddleware)
+# En producción no se publica el mapa completo de la API (/docs, /redoc, /openapi.json).
+show_docs = not settings.is_production
+app=FastAPI(title=settings.app_name,version="1.0.0",lifespan=lifespan,docs_url="/docs" if show_docs else None,redoc_url="/redoc" if show_docs else None,openapi_url="/openapi.json" if show_docs else None)
+# El último middleware agregado es el más externo: CORS envuelve todo y las cabeceras
+# de seguridad también se aplican a las respuestas 403 (CSRF) y 429 (rate limit).
 app.add_middleware(CSRFMiddleware)
+app.add_middleware(AuthRateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST","PATCH","DELETE","OPTIONS"],allow_headers=["Content-Type","X-CSRF-Token"])
 app.include_router(api_router,prefix=settings.api_prefix)
 @app.get("/")
-def root(): return {"status":"ok","app":settings.app_name,"variant":settings.arch_variant,"docs":"/docs"}
+def root(): return {"status":"ok","app":settings.app_name,"variant":settings.arch_variant,"docs":"/docs" if show_docs else None}

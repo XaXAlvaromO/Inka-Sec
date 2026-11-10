@@ -1,43 +1,32 @@
+
 services:
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: inkasec
-      POSTGRES_USER: inkasec
-      POSTGRES_PASSWORD: inkasec
+      POSTGRES_DB: ${DB_NAME:?Configura DB_NAME en el .env de la raiz}
+      POSTGRES_USER: ${DB_USER:?Configura DB_USER en el .env de la raiz}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Configura DB_PASSWORD en el .env de la raiz}
+
+    ports:
+      - "127.0.0.1:5433:5432"
 
     volumes:
       - inkasec_pg:/var/lib/postgresql
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U inkasec -d inkasec"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 20
-
-
-  redis:
-    image: redis:7-alpine
-
-    command:
-      - redis-server
-      - --appendonly
-      - "no"
-      - --save
-      - ""
-
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
 
   backend:
     build: ./mi-api-fastapi
 
     env_file:
       - ./mi-api-fastapi/.env
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
 
     ports:
       - "8001:8000"
@@ -59,6 +48,18 @@ services:
       retries: 20
       start_period: 10s
 
+  frontend:
+    build: ./frontend
+
+    ports:
+      - "5173:5173"
+
+    environment:
+      VITE_API_URL: http://localhost:8001/api/v1
+
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   inkasec_pg:
