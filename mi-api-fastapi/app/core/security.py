@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, binascii, hashlib, hmac, os, struct, time
+import hashlib, hmac, secrets
 from datetime import datetime, timedelta, timezone
 import jwt
 from argon2 import PasswordHasher
@@ -7,6 +7,7 @@ from argon2.exceptions import VerifyMismatchError
 from app.core.config import settings
 
 _hasher = PasswordHasher()
+EMAIL_CODE_LENGTH = 6
 
 def hash_password(password: str) -> str:
     return _hasher.hash(password)
@@ -26,31 +27,18 @@ def decode_access_token(token: str) -> dict:
     # Solo se acepta el algoritmo configurado (nunca "none") y los claims básicos son obligatorios.
     return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm], options={"require": ["exp", "iat", "sub"]})
 
-def new_totp_secret() -> str:
-    return base64.b32encode(os.urandom(20)).decode().rstrip("=")
+def new_email_code() -> str:
+    """Código de 6 dígitos generado con un CSPRNG (secrets), no con random."""
+    return f"{secrets.randbelow(10 ** EMAIL_CODE_LENGTH):0{EMAIL_CODE_LENGTH}d}"
 
-def _b32decode(secret: str) -> bytes:
-    padded = secret + "=" * ((8 - len(secret) % 8) % 8)
-    return base64.b32decode(padded, casefold=True)
+def hash_email_code(challenge_id: str, code: str) -> str:
+    """Solo se guarda el HMAC del código: si se filtra la base, no sirve para entrar.
+    Va ligado al desafío, así un mismo código no vale en dos desafíos distintos."""
+    key = settings.jwt_secret_key.encode()
+    return hmac.new(key, f"{challenge_id}:{code}".encode(), hashlib.sha256).hexdigest()
 
-def is_valid_totp_secret(secret: str) -> bool:
-    """Base32 válido y con al menos 80 bits (RFC 4226 recomienda 160)."""
-    try:
-        return len(_b32decode(secret.strip())) >= 10
-    except (binascii.Error, ValueError):
-        return False
-
-def totp_code(secret: str, at_time: int | None = None, step: int = 30, digits: int = 6) -> str:
-    counter = int((at_time or time.time()) // step)
-    msg = struct.pack(">Q", counter)
-    digest = hmac.new(_b32decode(secret), msg, hashlib.sha1).digest()
-    offset = digest[-1] & 0x0F
-    value = (struct.unpack(">I", digest[offset:offset+4])[0] & 0x7fffffff) % (10 ** digits)
-    return str(value).zfill(digits)
-
-def verify_totp(secret: str, code: str, window: int = 1) -> bool:
+def verify_email_code(challenge_id: str, code: str, expected_hash: str | None) -> bool:
     code = str(code)
-    if len(code) != 6 or not code.isdigit():
+    if not expected_hash or len(code) != EMAIL_CODE_LENGTH or not code.isdigit():
         return False
-    now = int(time.time())
-    return any(hmac.compare_digest(totp_code(secret, now + i*30), code) for i in range(-window, window+1))
+    return hmac.compare_digest(hash_email_code(challenge_id, code), expected_hash)

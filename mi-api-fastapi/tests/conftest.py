@@ -18,7 +18,6 @@ os.environ.update({
     "FRONTEND_ORIGIN": "http://localhost:5173",
 })
 
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -29,13 +28,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.core.middleware import auth_rate_limiter
-from app.core.security import hash_password, new_totp_secret, totp_code
+from app.core.security import hash_password
 from app.db.session import Base, get_db
+from app.services import auth_service
 from app.models.challenge import Challenge
 from app.models.models import Area, Company, LearningModule, User
 
 API = "/api/v1"
 PASSWORD = "Clave-Segura-2026"
+
+# Correos 2FA "enviados" durante la prueba: (destinatario, código). Nunca sale nada a internet.
+OUTBOX: list[tuple[str, str]] = []
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +46,19 @@ def _reset_rate_limiter():
     auth_rate_limiter.reset()
     yield
     auth_rate_limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _capture_login_codes(monkeypatch):
+    OUTBOX.clear()
+    monkeypatch.setattr(auth_service, "send_login_code", lambda to, code: OUTBOX.append((to, code)))
+    yield
+    OUTBOX.clear()
+
+
+def code_for(user) -> str:
+    """Último código 2FA enviado al correo de este usuario."""
+    return next(code for to, code in reversed(OUTBOX) if to == user.email)
 
 
 @pytest.fixture
@@ -87,8 +103,7 @@ def world(db, password_hash):
 
     def user(name, role, company=co, user_area=area):
         u = User(company_id=company.id, area_id=user_area.id, name=name, email=f"{name}@x.pe",
-                 password_hash=password_hash, role=role,
-                 totp_secret=new_totp_secret() if role in {"manager", "admin"} else None)
+                 password_hash=password_hash, role=role)
         db.add(u); db.commit(); return u
 
     def module(slug, status="published", company=co, by=None):
@@ -118,11 +133,9 @@ def csrf(client) -> dict:
     return {"x-csrf-token": client.cookies.get("inka_csrf") or ""}
 
 
-def wrong_code(secret: str) -> str:
-    """Un código de 6 dígitos que con seguridad NO es válido ahora mismo."""
-    now = int(time.time())
-    valid = {totp_code(secret, now + i * 30) for i in range(-2, 3)}
-    return next(code for code in (f"{n:06d}" for n in range(1_000_000)) if code not in valid)
+def wrong_code(code: str) -> str:
+    """Un código de 6 dígitos distinto al dado (el siguiente módulo 10^6)."""
+    return f"{(int(code) + 1) % 1_000_000:06d}"
 
 
 def start_login(client, user, password=PASSWORD):
@@ -133,7 +146,7 @@ def login(client, user, password=PASSWORD):
     """Inicio de sesión completo, con 2FA real para gestor y administrador."""
     r = start_login(client, user, password)
     if r.status_code == 200 and r.json().get("requires_2fa"):
-        r = client.post(f"{API}/auth/2fa/verify", json={"challenge_id": r.json()["challenge_id"], "code": totp_code(user.totp_secret)})
+        r = client.post(f"{API}/auth/2fa/verify", json={"challenge_id": r.json()["challenge_id"], "code": code_for(user)})
     return r
 
 

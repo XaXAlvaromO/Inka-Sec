@@ -36,8 +36,8 @@ Muchos incidentes en empresas peruanas (fraudes por correo, robo de cuentas, pé
 | Rol | Qué puede hacer hoy |
 |---|---|
 | **Trabajador** | Iniciar sesión, ver sus módulos y su avance, completar módulos (diagnóstico COM-B → microlección → preguntas → acción real), ver su reto pendiente y sus temas débiles. |
-| **Gestor de contenido** (2FA obligatorio) | Ver estadísticas de los módulos y retos que creó (tasa de aprobación, temas con más errores) y crear módulos en borrador clasificados por tema. |
-| **Administrador** (2FA obligatorio) | Crear, editar rol/estado, desactivar y eliminar usuarios; crear áreas; consultar la auditoría con búsqueda y paginación; ver indicadores por área y exportar el reporte en CSV. |
+| **Gestor de contenido** (código 2FA al correo) | Crea y edita módulos y retos en lenguaje sencillo, organízalos por tema (catálogo y búsqueda), asígnalos a la empresa, un área o una persona con fecha límite, y revisa el desempeño de cada trabajador en lo que creó. |
+| **Administrador** (código 2FA al correo) | Crear, editar rol/estado, desactivar y eliminar usuarios; crear áreas; consultar la auditoría con búsqueda y paginación; ver indicadores por área y exportar el reporte en CSV. |
 
 Cada empresa solo ve sus propios datos: todas las consultas se filtran por empresa (multiempresa).
 
@@ -54,7 +54,7 @@ flowchart LR
     end
     subgraph API["Server Side · FastAPI"]
         G["Capa de entrada (middlewares)<br/>CORS · cabeceras · rate limit · CSRF"]
-        AU["Autenticación<br/>Argon2 · JWT en cookie HttpOnly · TOTP 2FA"]
+        AU["Autenticación<br/>Argon2 · JWT en cookie HttpOnly · código 2FA por correo"]
         R["RBAC por ruta<br/>/worker · /manager · /admin"]
         S[Servicios y repositorios]
     end
@@ -68,7 +68,7 @@ flowchart LR
 |---|---|
 | Frontend | React 19, Vite 8, oxlint |
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2, Pydantic Settings |
-| Seguridad | Argon2 (contraseñas), PyJWT (sesión), TOTP RFC 6238 (2FA) |
+| Seguridad | Argon2 (contraseñas), PyJWT (sesión), código 2FA de 6 dígitos enviado por correo (Brevo o SMTP) |
 | Base de datos | PostgreSQL 18 (Docker / Render) · SQLite para desarrollo local rápido |
 | Infraestructura | Docker Compose, GitHub Actions, Render |
 | Calidad | pytest, Bandit (SAST), npm audit (SCA) |
@@ -101,11 +101,10 @@ Inka-Sec/
     │   ├── schemas/            # validación de entradas (Pydantic)
     │   ├── data/               # 7 módulos COM-B de ejemplo
     │   ├── seed.py             # datos demo (solo desarrollo)
-    │   ├── dev_totp.py         # genera el código 2FA de un usuario demo (solo desarrollo)
-    │   ├── dev_seed_challenges.py  # crea 3 retos demo (solo desarrollo)
+    │   ├── dev_seed_challenges.py  # crea los 2 retos demo del trabajador (solo desarrollo)
     │   ├── bootstrap_admin.py  # crea el primer administrador real
     │   └── worker.py           # depura auditoría con más de AUDIT_RETENTION_DAYS
-    └── tests/                  # 72 pruebas: funcionales y simulaciones de ataque
+    └── tests/                  # 110 pruebas: funcionales y simulaciones de ataque
 ```
 
 ## Inicio rápido
@@ -157,17 +156,12 @@ Con `SEED_DEMO_DATA=true` la API crea al arrancar la empresa demo, 7 módulos y 
 | Rol | Correo | 2FA |
 |---|---|---|
 | Trabajador | `trabajador@inkasec.pe` | No |
-| Gestor | `gestor@inkasec.pe` | Sí |
-| Administrador | `admin@inkasec.pe` | Sí |
+| Gestor | `gestor@inkasec.pe` | Código por correo |
+| Administrador | `admin@inkasec.pe` | Código por correo |
 
-Para obtener el código de 6 dígitos del gestor o del administrador (solo en desarrollo):
+Gestores y administradores reciben un código de 6 dígitos al iniciar sesión. Con `EMAIL_BACKEND=console` (valor por defecto en local) el código aparece en la terminal de la API, así puedes probar sin enviar correos. Para recibirlo en un Gmail real, usa `EMAIL_BACKEND=smtp` (ver abajo).
 
-```bash
-python -m app.dev_totp gestor@inkasec.pe                               # sin Docker
-docker compose exec backend python -m app.dev_totp gestor@inkasec.pe   # con Docker
-```
-
-Para cargar 3 retos de ejemplo: `python -m app.dev_seed_challenges` (o con `docker compose exec backend ...`).
+Los 2 retos de ejemplo se crean con el seed demo (`SEED_DEMO_DATA=true`). Si ya tienes la base de datos, `python -m app.dev_seed_challenges` los agrega sin duplicar (o con `docker compose exec backend ...`).
 
 ## Variables de entorno
 
@@ -183,13 +177,17 @@ Los archivos `.env` **nunca se suben a git**. Se crean a partir de las plantilla
 | `TRUSTED_PROXY_HOPS` | Proxies de confianza delante de la API (Render = 1). Con 0 se ignora `X-Forwarded-For`. | `0` |
 | `SEED_DEMO_DATA` / `DEMO_PASSWORD` | Datos demo y su contraseña (mínimo 8 caracteres). Prohibido en producción. | `true` / tu clave |
 | `AUDIT_RETENTION_DAYS` | Días que se conserva la auditoría. Mínimo 365 (RNF-06). | `365` |
-| `BOOTSTRAP_ADMIN_*` | Primer administrador real (`python -m app.bootstrap_admin`). Contraseña ≥ 12 caracteres y secreto TOTP en Base32. | vacío |
+| `EMAIL_BACKEND` | Cómo se envía el código 2FA: `console` (solo local, lo imprime en terminal), `smtp` (Gmail u otro servidor) o `brevo` (API HTTP, para Render gratuito). En producción no puede ser `console`. | `console` |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | Remitente del código. Con Brevo, el correo debe estar validado como remitente en la cuenta. | vacío / `InkaSec` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | Servidor SMTP con STARTTLS. Gmail: `smtp.gmail.com`, puerto `587`, y una contraseña de aplicación de Google. | vacío / `587` |
+| `BREVO_API_KEY` | Clave de la API de Brevo (`EMAIL_BACKEND=brevo`). | vacío |
+| `BOOTSTRAP_ADMIN_*` | Primer administrador real (`python -m app.bootstrap_admin`). Correo al que tengas acceso y contraseña de ≥ 12 caracteres. | vacío |
 
 ## Pruebas y análisis de seguridad
 
 ```bash
 cd mi-api-fastapi
-python -m pytest -q            # 72 pruebas
+python -m pytest -q            # 110 pruebas
 bandit -r app -ll -ii          # análisis estático (SAST)
 
 cd ../frontend
@@ -215,7 +213,7 @@ Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/c
 | Amenaza | Defensa | Prueba |
 |---|---|---|
 | Fuerza bruta de contraseña | Bloqueo de 15 min tras 3 fallos consecutivos (HTTP 423) y límite de 10 intentos/min por IP (HTTP 429) | `test_password_bruteforce_locks_the_account` |
-| Fuerza bruta de 2FA | Los códigos fallidos suman al mismo contador; al bloquear, el desafío se invalida | `test_2fa_bruteforce_locks_the_account_and_burns_the_challenge` |
+| Fuerza bruta de 2FA | Los códigos fallidos suman al mismo contador; al bloquear, el desafío se invalida. El código se guarda como HMAC ligado al desafío | `test_2fa_bruteforce_locks_the_account_and_burns_the_challenge`, `test_email_code_is_stored_only_as_a_keyed_hash` |
 | Robo de sesión por XSS | JWT en cookie `HttpOnly`; `Secure` obligatorio en producción; CSP en la API | `test_session_cookie_flags` |
 | Falsificación de tokens | Firma HS256 obligatoria; se exigen `exp`, `iat` y `sub`; el rol se lee de la BD, no del token | `test_forged_tokens_are_rejected` |
 | CSRF | Patrón *double submit cookie* en todo POST/PATCH/DELETE | `test_state_changes_require_matching_csrf_token` |
@@ -239,6 +237,25 @@ Pipeline en GitHub Actions (`.github/workflows/ci.yml`), con permisos mínimos y
 
 > En Render configura `APP_ENV=production`, `COOKIE_SECURE=true`, `TRUSTED_PROXY_HOPS=1`, `SEED_DEMO_DATA=false` y un `JWT_SECRET_KEY` propio de 32 caracteres o más.
 
+## Despliegue en Render (paso a paso)
+
+El archivo `render.yaml` describe tres servicios: la API (Docker), el frontend (sitio estático) y PostgreSQL.
+
+1. En Render: **New → Blueprint**, elige este repositorio y la rama. Render te pedirá los valores marcados como `sync: false`:
+   - `FRONTEND_ORIGIN`: la URL del sitio estático, por ejemplo `https://inkasec-web.onrender.com`.
+   - `EMAIL_FROM`: el correo validado como remitente en Brevo (puede ser tu Gmail).
+   - `BREVO_API_KEY`: clave de la API de Brevo (Settings → SMTP & API → API keys).
+2. Si Render cambia el nombre de la API (si `inkasec-api` ya está ocupado), actualiza la regla `/api/*` del sitio estático en `render.yaml` con la URL real.
+3. Crea el primer administrador desde la consola de la API (**Shell**), con un correo al que tengas acceso:
+   ```bash
+   BOOTSTRAP_ADMIN_EMAIL=tu.correo@gmail.com BOOTSTRAP_ADMIN_PASSWORD='una-clave-de-12-o-mas' python -m app.bootstrap_admin
+   ```
+   Luego inicia sesión en la web: el código 2FA llega a ese correo.
+
+> **Importante:** el plan gratuito de Render bloquea el SMTP saliente (puertos 25, 465 y 587), por eso el correo se envía por la API HTTP de Brevo. Las bases de datos gratuitas caducan a los 30 días y los servicios gratuitos se duermen tras 15 minutos sin uso (la primera carga tarda unos segundos).
+
+> **Si ya desplegaste una versión anterior:** el código 2FA cambió de TOTP a correo y la tabla `auth_challenges` tiene una columna nueva. Como `AUTO_CREATE_TABLES` no modifica tablas existentes, borra la base de datos del servicio (o crea una nueva) antes de volver a desplegar. La tabla `assignments` también cambió (ahora puede apuntar a un reto y guarda quién la creó), así que aplica la misma regla.
+
 ## API
 
 Prefijo: `/api/v1`. Autenticación por cookie; los métodos que modifican datos requieren la cabecera `X-CSRF-Token`.
@@ -250,7 +267,9 @@ Prefijo: `/api/v1`. Autenticación por cookie; los métodos que modifican datos 
 | GET · POST | `/auth/me` · `/auth/logout` | Autenticado |
 | GET | `/worker/dashboard` · `/worker/modules/{id}` | Trabajador |
 | POST | `/worker/modules/{id}/comb` · `/worker/modules/{id}/complete` · `/worker/challenges/{id}/answer` | Trabajador |
-| GET · POST | `/manager/dashboard` · `/manager/content` | Gestor |
+| GET | `/manager/dashboard` · `/manager/topics` · `/manager/stats` · `/manager/assignable` · `/manager/assignments` | Gestor |
+| GET · POST · PUT | `/manager/modules/{id}` · `/manager/modules` · `/manager/challenges/{id}` · `/manager/challenges` | Gestor (solo lo que creó) |
+| POST · DELETE | `/manager/assignments` · `/manager/assignments/{id}` | Gestor |
 | GET · POST · PATCH · DELETE | `/admin/users` · `/admin/users/{id}` | Administrador |
 | GET · POST | `/admin/areas` | Administrador |
 | GET | `/admin/dashboard` · `/admin/audit` · `/admin/reports/summary` · `/admin/reports/export` | Administrador |
@@ -261,19 +280,13 @@ El detalle de cada ruta está en http://localhost:8001/docs mientras corre la AP
 
 | Requerimiento | Estado |
 |---|---|
-| RF-01 Acceso con roles y 2FA | ✅ Implementado |
+| RF-01 Acceso con roles y 2FA por correo | ✅ Implementado |
 | RF-02 Gestión de usuarios y áreas, auditoría | ✅ Implementado (edición limitada a rol y estado) |
-| RF-03 Gestión de contenidos | 🟡 Parcial: crear borradores por tema; falta editar, publicar y crear retos desde la interfaz |
-| RF-04 Asignaciones, plazos y notificaciones | ⏳ Pendiente (existe el modelo de datos) |
-| RF-05 Evaluación con retos y retroalimentación | 🟡 Parcial: la API evalúa y da retroalimentación; falta conectar el botón «Resolver reto» |
+| RF-03 Gestión de contenidos | ✅ Implementado: módulos y retos en lenguaje sencillo, temas del catálogo, búsqueda, borrador/publicado/archivado |
+| RF-04 Asignaciones, plazos y notificaciones | 🟡 Parcial: asignación a empresa, área o persona con fecha límite; falta notificar por correo |
+| RF-05 Evaluación con retos y retroalimentación | ✅ Implementado: el trabajador responde el reto, la API califica y muestra la explicación |
 | RF-06 Seguimiento, estadísticas y reportes | ✅ Implementado (errores agrupados por tema) |
 | RF-07 Certificados | ⏳ Pendiente |
-
-**Inconsistencias conocidas del frontend**:
-
-- «Temas a reforzar» y «Temas con más errores» esperan los campos `name`/`score` y `errorRate`, pero la API envía `topic`/`errors` y `error_rate`.
-- El tipo «Reto» del formulario de contenido se ignora: siempre se crea un módulo.
-- Las pestañas Retos y Asignaciones del gestor muestran texto provisional.
 
 ## Cómo contribuir
 

@@ -29,7 +29,16 @@ class Settings(BaseSettings):
     bootstrap_company_name: str = "InkaSec"
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    bootstrap_admin_totp_secret: str | None = None
+    # Envío del código 2FA (gestores y administradores). En producción nunca es "console".
+    # brevo: API HTTP (funciona en Render gratuito). smtp: Gmail u otro servidor (local o plan pagado).
+    email_backend: Literal["console", "smtp", "brevo"] = "console"
+    email_from: str | None = None
+    email_from_name: str = "InkaSec"
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    brevo_api_key: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
@@ -47,6 +56,14 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_ORIGIN no puede ser '*': la API envía cookies de sesión")
         if self.cookie_samesite == "none" and not self.cookie_secure:
             raise ValueError("COOKIE_SAMESITE=none exige COOKIE_SECURE=true")
+        if self.email_backend == "console" and self.is_production:
+            raise ValueError("En producción EMAIL_BACKEND debe ser smtp o brevo (el código 2FA debe llegar al correo)")
+        if self.email_backend != "console" and not self.email_from:
+            raise ValueError("EMAIL_FROM es obligatorio para enviar códigos por correo")
+        if self.email_backend == "smtp" and not (self.smtp_host and self.smtp_username and self.smtp_password):
+            raise ValueError("EMAIL_BACKEND=smtp exige SMTP_HOST, SMTP_USERNAME y SMTP_PASSWORD")
+        if self.email_backend == "brevo" and not self.brevo_api_key:
+            raise ValueError("EMAIL_BACKEND=brevo exige BREVO_API_KEY")
         if self.is_production:
             if not self.cookie_secure:
                 raise ValueError("En producción COOKIE_SECURE debe ser true (cookies solo por HTTPS)")

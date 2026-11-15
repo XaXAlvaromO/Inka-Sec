@@ -7,7 +7,7 @@ from sqlalchemy import select, func, or_, and_, case
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.dependencies import client_ip, require_roles
-from app.core.security import hash_password, new_totp_secret
+from app.core.security import hash_password
 from app.models.models import User, Area, AuditLog
 from app.repositories.user_repository import get_by_email, list_by_company, normalize_email
 from app.services.admin_report_service import admin_report_summary
@@ -46,11 +46,10 @@ def create_user(payload:UserCreate,request:Request,db:Session=Depends(get_db),ad
     area_name=payload.area; area=db.scalar(select(Area).where(Area.company_id==admin.company_id,Area.name==area_name))
     if not area: area=Area(company_id=admin.company_id,name=area_name); db.add(area); db.commit(); db.refresh(area)
     role=payload.role
-    secret=new_totp_secret() if role in {"manager","admin"} else None
     temporary_password=secrets.token_urlsafe(15)
-    u=User(company_id=admin.company_id,area_id=area.id,name=payload.name,email=email,password_hash=hash_password(temporary_password),role=role,totp_secret=secret,is_active=True)
+    u=User(company_id=admin.company_id,area_id=area.id,name=payload.name,email=email,password_hash=hash_password(temporary_password),role=role,is_active=True)
     db.add(u); db.commit(); db.refresh(u); record_audit(db,action="USER_CREATED",result="success",user=admin,ip=client_ip(request),details={"target_user_id":u.id,"role":role})
-    return {**user_row(u),"temporary_password":temporary_password,"totp_setup_secret":secret}
+    return {**user_row(u),"temporary_password":temporary_password}
 @router.patch("/users/{user_id}")
 def update_user(user_id:int,payload:UserUpdate,request:Request,db:Session=Depends(get_db),admin=Depends(require_roles("admin"))):
     u=company_user(db,user_id,admin)
@@ -60,7 +59,6 @@ def update_user(user_id:int,payload:UserUpdate,request:Request,db:Session=Depend
     old_role=u.role
     if payload.role is not None:
         u.role=payload.role
-        if u.role in {"manager","admin"} and not u.totp_secret: u.totp_secret=new_totp_secret()
     if payload.is_active is not None: u.is_active=payload.is_active
     db.commit(); record_audit(db,action="ROLE_CHANGED" if old_role!=u.role else "USER_UPDATED",result="success",user=admin,ip=client_ip(request),details={"target_user_id":u.id,"old_role":old_role,"new_role":u.role})
     return {"ok":True}

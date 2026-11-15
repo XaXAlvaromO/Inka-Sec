@@ -93,8 +93,11 @@ def get_attempt(db: Session, user_id: int, challenge_id: int) -> ChallengeAttemp
         ChallengeAttempt.user_id == user_id, ChallengeAttempt.challenge_id == challenge_id))
 
 
-def next_pending_challenge(db: Session, user: User) -> Challenge | None:
+def next_pending_challenge(db: Session, user: User, allowed_ids: list[int]) -> Challenge | None:
+    """Primer reto visible para el trabajador que aún no respondió."""
+    if not allowed_ids:
+        return None
     answered = select(ChallengeAttempt.challenge_id).where(ChallengeAttempt.user_id == user.id)
     return db.scalar(select(Challenge).where(
         Challenge.company_id == user.company_id, Challenge.status == "published",
-        Challenge.id.not_in(answered)).order_by(Challenge.id).limit(1))
+        Challenge.id.in_(allowed_ids), Challenge.id.not_in(answered)).order_by(Challenge.id).limit(1))

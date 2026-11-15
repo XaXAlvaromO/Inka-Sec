@@ -10,15 +10,24 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.models.models import User, ModuleProgress, utcnow
+from app.models.models import User, ModuleProgress, Reflection, utcnow
 from app.models.challenge import Challenge, ChallengeAttempt
 from app.repositories import progress_repository as repo
 from app.repositories import module_repository
+from app.services import visibility
 
 
 class NotFound(Exception): ...
 class AlreadyAnswered(Exception): ...
 class InvalidChoice(Exception): ...
+
+
+def visible_module(db: Session, user: User, module_id: int):
+    """Módulo publicado de la empresa que este trabajador puede abrir (asignado o para todos)."""
+    module = module_repository.get_for_company(db, module_id, user.company_id, published_only=True)
+    if not module or not visibility.can_open(db, user, "module", module.id)[0]:
+        raise NotFound("Módulo no encontrado")
+    return module
 
 
 def pct(part: int, total: int) -> int:
@@ -33,8 +42,7 @@ def rate(part: int, total: int) -> int | None:
 # ---------- Acciones del trabajador ----------
 
 def mark_module_completed(db: Session, user: User, module_id: int) -> dict:
-    if not module_repository.get_for_company(db, module_id, user.company_id, published_only=True):
-        raise NotFound("Módulo no encontrado")
+    visible_module(db, user, module_id)
     p = db.scalar(select(ModuleProgress).where(ModuleProgress.user_id == user.id, ModuleProgress.module_id == module_id))
     if not p:
         p = ModuleProgress(user_id=user.id, module_id=module_id)
@@ -53,6 +61,8 @@ def submit_challenge_answer(db: Session, user: User, challenge_id: int, choice: 
     ch = db.get(Challenge, challenge_id)
     if not ch or ch.company_id != user.company_id or ch.status != "published":
         raise NotFound("Reto no encontrado")
+    if not visibility.can_open(db, user, "challenge", ch.id)[0]:
+        raise NotFound("Reto no encontrado")
     if not 0 <= choice < len(ch.options):
         raise InvalidChoice("Opción fuera de rango")
     if repo.get_attempt(db, user.id, challenge_id):
@@ -70,16 +80,20 @@ def submit_challenge_answer(db: Session, user: User, challenge_id: int, choice: 
 # ---------- Vista del trabajador ----------
 
 def worker_progress(db: Session, user: User) -> dict:
-    total_m = repo.count_published_modules(db, user.company_id)
-    total_c = repo.count_published_challenges(db, user.company_id)
-    done = repo.completed_modules_by_user(db, user.company_id, user.id).get(user.id, 0)
+    # Solo cuentan los módulos y retos que este trabajador tiene asignados o son para toda la empresa.
+    visible_m = visibility.visible_items(db, user, "module")
+    visible_c = visibility.visible_items(db, user, "challenge")
+    done_ids = set(db.scalars(select(ModuleProgress.module_id).where(
+        ModuleProgress.user_id == user.id, ModuleProgress.completed_at.is_not(None))).all())
+    total_m, total_c = len(visible_m), len(visible_c)
+    done = len(done_ids & set(visible_m))
     answered, correct = repo.challenge_results_by_user(db, user.company_id, user.id).get(user.id, (0, 0))
     return {
         "modules": {"completed": done, "total": total_m, "percent": pct(done, total_m)},
         "challenges": {"correct": correct, "answered": answered, "total": total_c,
                        "accuracy": rate(correct, answered)},
-        "weak_topics": [{"topic": t, "errors": int(e)} for t, _, e in
-                        repo.topic_errors(db, user.company_id, user_id=user.id)],
+        "weak_topics": [{"topic": t, "errors": int(e), "attempts": int(a), "score": pct(int(a) - int(e), int(a))}
+                        for t, a, e in repo.topic_errors(db, user.company_id, user_id=user.id)],
     }
 
 
@@ -124,20 +138,55 @@ def by_area(rows: list[dict]) -> dict[str, dict]:
 
 # ---------- Vista del gestor ----------
 
-def manager_stats(db: Session, manager: User) -> dict:
-    """Desempeño solo de lo que este gestor creó."""
-    workers = len(repo.active_workers(db, manager.company_id))
-    return {
-        "modules": [{"id": m.id, "title": m.title, "topic": m.topic, "status": m.status,
-                     "completed": n, "total_workers": workers, "completion_rate": rate(n, workers)}
-                    for m, n in repo.module_completion(db, manager.company_id, created_by=manager.id)],
-        "challenges": [{"id": c.id, "title": c.title, "topic": c.topic, "status": c.status,
-                        "attempts": int(a), "correct": int(ok), "success_rate": rate(int(ok), int(a))}
-                       for c, a, ok in repo.challenge_performance(db, manager.company_id, created_by=manager.id)],
-        "topic_errors": _topic_errors(db, manager.company_id, created_by=manager.id),
-    }
-
-
-def _topic_errors(db: Session, company_id: int, created_by: int | None = None) -> list[dict]:
+def topic_errors_for(db: Session, company_id: int, created_by: int | None = None) -> list[dict]:
+    """Temas con más errores (retos publicados). Con created_by, solo los retos de ese gestor."""
     return [{"topic": t, "attempts": int(a), "errors": int(e), "error_rate": rate(int(e), int(a))}
             for t, a, e in repo.topic_errors(db, company_id, created_by=created_by)]
+
+
+# ---------- Contenido del módulo para el trabajador ----------
+
+def worker_module_view(content: dict) -> dict:
+    """El trabajador ve el módulo sin las respuestas correctas: se califican en el servidor."""
+    view = dict(content)
+    view["capacity_questions"] = [
+        {"prompt": q.get("prompt", ""), "options": list(q.get("options", []))}
+        for q in content.get("capacity_questions", [])
+    ]
+    return view
+
+
+def grade_capacity(db: Session, user: User, module_id: int, answers: list[dict]) -> dict:
+    module = visible_module(db, user, module_id)
+    questions = module.content_json.get("capacity_questions", [])
+    if len(answers) != len(questions) or sorted(a["index"] for a in answers) != list(range(len(questions))):
+        raise InvalidChoice("Responde todas las preguntas del módulo")
+    by_index = {a["index"]: a["choice"] for a in answers}
+    results = []
+    for index, q in enumerate(questions):
+        options = q.get("options", [])
+        choice = by_index[index]
+        if not 0 <= choice < len(options):
+            raise InvalidChoice("Opción fuera de rango")
+        correct = choice == q.get("correct")
+        results.append({"index": index, "is_correct": correct, "correct_index": q.get("correct"),
+                        "feedback": q.get("feedback", "")})
+    return {"results": results, "correct": sum(r["is_correct"] for r in results), "total": len(results)}
+
+
+def save_reflections(db: Session, user: User, module_id: int, responses: list[dict]) -> int:
+    visible_module(db, user, module_id)
+    for item in responses:
+        row = db.scalar(select(Reflection).where(Reflection.user_id == user.id, Reflection.module_id == module_id,
+                                                 Reflection.prompt_code == item["prompt_code"]))
+        if row:
+            row.text = item["text"].strip()
+        else:
+            db.add(Reflection(user_id=user.id, module_id=module_id, prompt_code=item["prompt_code"], text=item["text"].strip()))
+    db.commit()
+    return len(responses)
+
+
+def saved_reflections(db: Session, user: User, module_id: int) -> dict[str, str]:
+    rows = db.scalars(select(Reflection).where(Reflection.user_id == user.id, Reflection.module_id == module_id)).all()
+    return {r.prompt_code: r.text for r in rows}

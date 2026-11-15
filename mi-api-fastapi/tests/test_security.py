@@ -14,12 +14,14 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from app import bootstrap_admin, dev_seed_challenges, dev_totp, seed
+from app import bootstrap_admin, dev_seed_challenges, seed
 from app.core.config import Settings, settings
-from app.core.security import totp_code
+from app.core.security import hash_email_code
+from app.services import auth_service
+from app.services.email_service import EmailDeliveryError, mask_email
 from app.main import app
 from app.models.models import Area, AuditLog, AuthChallenge, CombResponse, User
-from conftest import API, csrf, start_login, wrong_code
+from conftest import API, OUTBOX, code_for, csrf, start_login, wrong_code
 
 UNKNOWN = "nadie@x.pe"
 
@@ -116,18 +118,18 @@ def test_sql_injection_in_login_is_inert(world):
 def test_2fa_bruteforce_locks_the_account_and_burns_the_challenge(world):
     attacker = TestClient(app)
     challenge_id = start_login(attacker, world.mgr).json()["challenge_id"]   # supongamos que robó la contraseña
-    bad = wrong_code(world.mgr.totp_secret)
+    bad = wrong_code(code_for(world.mgr))
     for _ in range(3):
         assert verify(attacker, challenge_id, bad).status_code == 401
     # El desafío quedó inutilizado: ni con el código correcto entra.
-    assert verify(attacker, challenge_id, totp_code(world.mgr.totp_secret)).status_code == 401
+    assert verify(attacker, challenge_id, code_for(world.mgr)).status_code == 401
     assert start_login(attacker, world.mgr).status_code == 423
 
 
 def test_logging_in_again_does_not_reset_the_2fa_failures(world):
     attacker = TestClient(app)
-    bad = wrong_code(world.mgr.totp_secret)
     first = start_login(attacker, world.mgr).json()["challenge_id"]
+    bad = wrong_code(code_for(world.mgr))
     verify(attacker, first, bad); verify(attacker, first, bad)
     second = start_login(attacker, world.mgr).json()["challenge_id"]       # intenta "recargar" intentos
     verify(attacker, second, bad)
@@ -136,19 +138,19 @@ def test_logging_in_again_does_not_reset_the_2fa_failures(world):
 
 def test_successful_2fa_resets_the_counter(world):
     client = TestClient(app)
-    bad = wrong_code(world.mgr.totp_secret)
     cid = start_login(client, world.mgr).json()["challenge_id"]
+    bad = wrong_code(code_for(world.mgr))
     verify(client, cid, bad); verify(client, cid, bad)
-    assert verify(client, cid, totp_code(world.mgr.totp_secret)).status_code == 200
+    assert verify(client, cid, code_for(world.mgr)).status_code == 200
     cid = start_login(client, world.mgr).json()["challenge_id"]
-    verify(client, cid, bad)
-    assert verify(client, cid, totp_code(world.mgr.totp_secret)).status_code == 200
+    verify(client, cid, wrong_code(code_for(world.mgr)))
+    assert verify(client, cid, code_for(world.mgr)).status_code == 200
 
 
 def test_2fa_challenge_cannot_be_replayed(world):
     client = TestClient(app)
     cid = start_login(client, world.adm).json()["challenge_id"]
-    code = totp_code(world.adm.totp_secret)
+    code = code_for(world.adm)
     assert verify(client, cid, code).status_code == 200
     assert verify(TestClient(app), cid, code).status_code == 401
 
@@ -158,7 +160,45 @@ def test_expired_2fa_challenge_is_rejected(world, db):
     cid = start_login(client, world.adm).json()["challenge_id"]
     row = db.scalar(select(AuthChallenge).where(AuthChallenge.challenge_id == cid))
     row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1); db.commit()
-    assert verify(client, cid, totp_code(world.adm.totp_secret)).status_code == 401
+    assert verify(client, cid, code_for(world.adm)).status_code == 401
+
+
+def test_email_code_is_stored_only_as_a_keyed_hash(world, db):
+    client = TestClient(app)
+    cid = start_login(client, world.mgr).json()["challenge_id"]
+    code = code_for(world.mgr)
+    row = db.scalar(select(AuthChallenge).where(AuthChallenge.challenge_id == cid))
+    assert row.code_hash and code not in row.code_hash and len(row.code_hash) == 64
+    assert row.code_hash == hash_email_code(cid, code)     # ligado a este desafío
+
+
+def test_email_code_from_one_challenge_does_not_open_another(world):
+    client = TestClient(app)
+    first = start_login(client, world.mgr).json()["challenge_id"]
+    old_code = code_for(world.mgr)
+    second = start_login(client, world.mgr).json()["challenge_id"]
+    new_code = code_for(world.mgr)
+    if old_code == new_code:          # 1 de cada millón: el código nuevo coincide; no hay nada que probar
+        pytest.skip("códigos iguales por azar")
+    assert verify(client, second, old_code).status_code == 401
+    assert verify(client, first, new_code).status_code == 401
+
+
+def test_2fa_code_is_only_sent_to_the_account_email(world):
+    client = TestClient(app)
+    start_login(client, world.mgr)
+    assert [to for to, _ in OUTBOX] == [world.mgr.email]
+
+
+def test_no_session_when_the_code_cannot_be_delivered(world, db, monkeypatch):
+    def broken(to, code):
+        raise EmailDeliveryError("fallo simulado")
+    monkeypatch.setattr(auth_service, "send_login_code", broken)
+    client = TestClient(app)
+    r = start_login(client, world.mgr)
+    assert r.status_code == 503 and "correo" in r.json()["detail"]
+    assert "inka_access" not in r.cookies
+    assert db.scalar(select(AuthChallenge).where(AuthChallenge.user_id == world.mgr.id)) is None
 
 
 @pytest.mark.parametrize("payload", [
@@ -254,7 +294,7 @@ def test_state_changes_require_matching_csrf_token(world, client_for, header):
 
 ROLE_MATRIX = [
     ("GET", "/admin/dashboard"), ("GET", "/admin/users"), ("GET", "/admin/audit"), ("GET", "/admin/reports/export"),
-    ("POST", "/admin/areas"), ("GET", "/manager/dashboard"), ("POST", "/manager/content"),
+    ("POST", "/admin/areas"), ("GET", "/manager/dashboard"), ("POST", "/manager/modules"),
     ("GET", "/worker/dashboard"),
 ]
 ALLOWED_PREFIX = {"w1": "/worker", "mgr": "/manager", "adm": "/admin"}
@@ -300,7 +340,7 @@ def test_admin_cannot_lock_themselves_out(world, client_for, db):
 def test_extra_fields_cannot_escalate_privileges(world, client_for, db):
     """Asignación masiva: campos que no están en el esquema se ignoran."""
     admin = client_for(world.adm)
-    payload = {"is_active": True, "company_id": world.other.id, "password_hash": "x", "totp_secret": None}
+    payload = {"is_active": True, "company_id": world.other.id, "password_hash": "x", "role": "admin"}
     assert admin.patch(f"{API}/admin/users/{world.w1.id}", json=payload, headers=csrf(admin)).status_code == 200
     db.expire_all()
     victim = db.get(User, world.w1.id)
@@ -421,30 +461,40 @@ def test_insecure_configuration_refuses_to_start(overrides):
         make_settings(**overrides)
 
 
+PROD_EMAIL = {"email_backend": "brevo", "brevo_api_key": "xkeysib-test", "email_from": "inkasec@gmail.com"}
+
+
 def test_secure_production_configuration_is_accepted():
-    s = make_settings(app_env="production", cookie_secure=True, trusted_proxy_hops=1)
+    s = make_settings(app_env="production", cookie_secure=True, trusted_proxy_hops=1, **PROD_EMAIL)
     assert s.is_production
+
+
+@pytest.mark.parametrize("overrides", [
+    {"app_env": "production", "cookie_secure": True},                                   # sin correo real: console
+    {"email_backend": "brevo", "brevo_api_key": "k"},                                   # falta EMAIL_FROM
+    {"email_backend": "smtp", "email_from": "a@gmail.com", "smtp_host": "smtp.gmail.com"},  # falta usuario y clave
+    {"email_backend": "brevo", "email_from": "a@gmail.com"},                            # falta la API key
+])
+def test_email_configuration_must_be_complete(overrides):
+    with pytest.raises(ValidationError):
+        make_settings(**overrides)
 
 
 def test_dev_scripts_refuse_to_run_in_production(monkeypatch):
     monkeypatch.setattr(settings, "app_env", "production")
-    with pytest.raises(SystemExit, match="producción"):
-        dev_totp.main("admin@inkasec.pe")
     with pytest.raises(SystemExit, match="producción"):
         dev_seed_challenges.main()
     with pytest.raises(RuntimeError, match="producción"):
         seed.seed_demo()
 
 
-@pytest.mark.parametrize("password,secret,message", [
-    ("corta", "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", "al menos 12"),
-    ("una-clave-bien-larga", "esto-no-es-base32!", "Base32"),
-    ("una-clave-bien-larga", "JBSW", "Base32"),
+@pytest.mark.parametrize("password,message", [
+    ("corta", "al menos 12"),
+    ("", "BOOTSTRAP_ADMIN_PASSWORD"),
 ])
-def test_bootstrap_admin_rejects_weak_settings(monkeypatch, password, secret, message):
+def test_bootstrap_admin_rejects_weak_settings(monkeypatch, password, message):
     monkeypatch.setattr(settings, "bootstrap_admin_email", "admin@empresa.pe")
     monkeypatch.setattr(settings, "bootstrap_admin_password", password)
-    monkeypatch.setattr(settings, "bootstrap_admin_totp_secret", secret)
     with pytest.raises(SystemExit, match=message):
         bootstrap_admin.validate_bootstrap_settings()
 
@@ -452,5 +502,74 @@ def test_bootstrap_admin_rejects_weak_settings(monkeypatch, password, secret, me
 def test_bootstrap_admin_accepts_strong_settings(monkeypatch):
     monkeypatch.setattr(settings, "bootstrap_admin_email", "admin@empresa.pe")
     monkeypatch.setattr(settings, "bootstrap_admin_password", "una-clave-bien-larga")
-    monkeypatch.setattr(settings, "bootstrap_admin_totp_secret", "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP")
     bootstrap_admin.validate_bootstrap_settings()
+
+
+# ------------------------------------------------------------------ correo 2FA
+
+def test_console_email_backend_is_refused_in_production(monkeypatch):
+    from app.services import email_service
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "email_backend", "console")
+    with pytest.raises(EmailDeliveryError, match="producción"):
+        email_service.send_login_code("admin@x.pe", "123456")
+
+
+def test_smtp_sender_uses_starttls_and_reports_failures_without_the_code(monkeypatch):
+    from app.services import email_service
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            sent["where"] = (host, port)
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def starttls(self, context): sent["tls"] = context is not None
+        def login(self, user, password): sent["login"] = (user, password)
+        def send_message(self, message): sent["body"] = message.get_content(); sent["to"] = message["To"]
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(settings, "email_backend", "smtp")
+    monkeypatch.setattr(settings, "email_from", "inkasec@gmail.com")
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_username", "inkasec@gmail.com")
+    monkeypatch.setattr(settings, "smtp_password", "clave-app")
+    email_service.send_login_code("gestor@empresa.pe", "482913")
+    assert sent["where"] == ("smtp.gmail.com", 587) and sent["tls"] and sent["login"][1] == "clave-app"
+    assert sent["to"] == "gestor@empresa.pe" and "482913" in sent["body"]
+
+    class BrokenSMTP(FakeSMTP):
+        def login(self, user, password): raise email_service.smtplib.SMTPAuthenticationError(535, b"denied")
+    monkeypatch.setattr(email_service.smtplib, "SMTP", BrokenSMTP)
+    with pytest.raises(EmailDeliveryError) as info:
+        email_service.send_login_code("gestor@empresa.pe", "482913")
+    assert "482913" not in str(info.value) and "clave-app" not in str(info.value)
+
+
+def test_brevo_sender_posts_the_code_and_rejects_error_responses(monkeypatch):
+    from app.services import email_service
+    calls = []
+
+    class Response:
+        def __init__(self, status): self.status_code = status
+
+    def fake_post(url, json, headers, timeout):
+        calls.append((url, json, headers))
+        return Response(201 if len(calls) == 1 else 401)
+
+    monkeypatch.setattr(email_service.httpx, "post", fake_post)
+    monkeypatch.setattr(settings, "email_backend", "brevo")
+    monkeypatch.setattr(settings, "email_from", "inkasec@gmail.com")
+    monkeypatch.setattr(settings, "brevo_api_key", "xkeysib-test")
+    email_service.send_login_code("gestor@empresa.pe", "482913")
+    url, payload, headers = calls[0]
+    assert url == email_service.BREVO_URL and headers["api-key"] == "xkeysib-test"
+    assert payload["to"] == [{"email": "gestor@empresa.pe"}] and "482913" in payload["textContent"]
+    with pytest.raises(EmailDeliveryError) as info:
+        email_service.send_login_code("gestor@empresa.pe", "482913")
+    assert "401" in str(info.value) and "482913" not in str(info.value)
+
+
+def test_masked_email_hides_most_of_the_address():
+    assert mask_email("gestor.lopez@gmail.com") == "g***@gmail.com"
+    assert "gestor" not in mask_email("gestor.lopez@gmail.com")

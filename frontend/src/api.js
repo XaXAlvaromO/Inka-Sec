@@ -62,26 +62,29 @@ export const api = {
   },
 
   worker: {
-  dashboard: () => request('/worker/dashboard'),
-
-  module: (id) =>
-    request(`/worker/modules/${id}`),
-
-  saveComb: (id, payload) =>
-    request(`/worker/modules/${id}/comb`, {
-      method: 'POST',
-      body: payload,
-    }),
-
-  completeModule: (id) =>
-    request(`/worker/modules/${id}/complete`, {
-      method: 'POST',
-    }),
-},
+    dashboard: () => request('/worker/dashboard'),
+    module: (id) => request(`/worker/modules/${id}`),
+    saveComb: (id, payload) => request(`/worker/modules/${id}/comb`, { method: 'POST', body: payload }),
+    gradeCapacity: (id, payload) => request(`/worker/modules/${id}/capacity`, { method: 'POST', body: payload }),
+    saveReflections: (id, payload) => request(`/worker/modules/${id}/reflections`, { method: 'POST', body: payload }),
+    completeModule: (id) => request(`/worker/modules/${id}/complete`, { method: 'POST' }),
+    answerChallenge: (id, payload) => request(`/worker/challenges/${id}/answer`, { method: 'POST', body: payload }),
+  },
 
   manager: {
     dashboard: () => request('/manager/dashboard'),
-    createContent: (payload) => request('/manager/content', { method: 'POST', body: payload }),
+    topics: () => request('/manager/topics'),
+    getModule: (id) => request(`/manager/modules/${encodeURIComponent(id)}`),
+    createModule: (payload) => request('/manager/modules', { method: 'POST', body: payload }),
+    updateModule: (id, payload) => request(`/manager/modules/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }),
+    getChallenge: (id) => request(`/manager/challenges/${encodeURIComponent(id)}`),
+    createChallenge: (payload) => request('/manager/challenges', { method: 'POST', body: payload }),
+    updateChallenge: (id, payload) => request(`/manager/challenges/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }),
+    assignable: () => request('/manager/assignable'),
+    assignments: () => request('/manager/assignments'),
+    createAssignment: (payload) => request('/manager/assignments', { method: 'POST', body: payload }),
+    deleteAssignment: (id) => request(`/manager/assignments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    stats: () => request('/manager/stats'),
   },
 
   admin: {
