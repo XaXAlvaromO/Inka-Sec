@@ -18,3 +18,6 @@ dist/
 # IDEs
 .vscode/settings.json
 .idea/
+
+.coverage
+htmlcov/

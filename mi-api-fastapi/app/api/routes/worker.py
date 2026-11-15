@@ -3,25 +3,34 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.dependencies import require_roles
 from app.models.models import CombResponse
-from app.repositories import module_repository
 from app.services.dashboard_service import worker_dashboard
-from app.schemas.content import CombPayload
+from app.schemas.content import CombPayload, CapacityPayload, ReflectionPayload
 from app.schemas.progress import ChallengeAnswer
 from app.services import progress_service
 
 router=APIRouter(prefix="/worker", tags=["worker"])
 
 def _published_module(db: Session, module_id: int, user):
-    # Un trabajador solo ve módulos publicados de su empresa (ni borradores ni de otras empresas).
-    module = module_repository.get_for_company(db, module_id, user.company_id, published_only=True)
-    if not module: raise HTTPException(404,"Módulo no encontrado")
-    return module
+    # Solo módulos publicados de su empresa que le toquen (asignados a él, a su área o a toda la empresa).
+    try: return progress_service.visible_module(db,user,module_id)
+    except progress_service.NotFound as e: raise HTTPException(404,str(e))
 
 @router.get("/dashboard")
 def dashboard(db:Session=Depends(get_db), user=Depends(require_roles("worker"))): return worker_dashboard(db,user)
 @router.get("/modules/{module_id}")
 def module_detail(module_id:int,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
-    return _published_module(db,module_id,user).content_json
+    module=_published_module(db,module_id,user)
+    return {**progress_service.worker_module_view(module.content_json),"saved_reflections":progress_service.saved_reflections(db,user,module_id)}
+@router.post("/modules/{module_id}/capacity")
+def grade_capacity(module_id:int,payload:CapacityPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    try: return progress_service.grade_capacity(db,user,module_id,[a.model_dump() for a in payload.answers])
+    except progress_service.NotFound as e: raise HTTPException(404,str(e))
+    except progress_service.InvalidChoice as e: raise HTTPException(422,str(e))
+@router.post("/modules/{module_id}/reflections")
+def save_reflections(module_id:int,payload:ReflectionPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    try: saved=progress_service.save_reflections(db,user,module_id,[r.model_dump() for r in payload.responses])
+    except progress_service.NotFound as e: raise HTTPException(404,str(e))
+    return {"saved":saved}
 @router.post("/modules/{module_id}/comb")
 def save_comb(module_id:int,payload:CombPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
     _published_module(db,module_id,user)

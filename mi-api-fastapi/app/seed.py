@@ -7,8 +7,9 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.security import hash_password, new_totp_secret
+from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
+from app.demo_challenges import ensure_demo_challenges
 from app.models.models import Area, Company, LearningModule, ModuleProgress, Notification, User
 
 
@@ -54,7 +55,6 @@ def seed_demo():
         for name, email, role, area_name in demo:
             user = db.scalar(select(User).where(User.email == email))
             if not user:
-                secret = new_totp_secret() if role in {"manager", "admin"} else None
                 user = User(
                     company_id=company.id,
                     area_id=areas[area_name].id,
@@ -62,7 +62,6 @@ def seed_demo():
                     email=email,
                     password_hash=hash_password(settings.demo_password),
                     role=role,
-                    totp_secret=secret,
                     is_active=True,
                 )
                 db.add(user)
@@ -94,6 +93,9 @@ def seed_demo():
                 db.refresh(module)
                 db.add(ModuleProgress(user_id=users["worker"].id, module_id=module.id, progress=0))
 
+        # Dos retos publicados para que el trabajador tenga algo que responder desde el primer inicio.
+        ensure_demo_challenges(db, company, users["manager"])
+
         if not db.scalar(select(Notification).where(Notification.user_id == users["worker"].id)):
             db.add(
                 Notification(
@@ -110,7 +112,7 @@ def seed_demo():
         print("manager: gestor@inkasec.pe")
         print("admin: admin@inkasec.pe")
         print("La contraseña es la configurada en DEMO_PASSWORD; no se imprime en logs.")
-        print("Para un TOTP local usa: python -m app.dev_totp <correo>")
+        print("Gestor y administrador piden código 2FA por correo: con EMAIL_BACKEND=console aparece en esta terminal.")
     finally:
         db.close()
 

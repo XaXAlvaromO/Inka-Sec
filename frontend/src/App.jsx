@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Component, Fragment, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import InkaSecLayout, { Icon } from './InkaSecLayout';
 import { api } from './api';
@@ -27,6 +27,7 @@ function LoginPage() {
   const [step, setStep] = useState('credentials');
   const [form, setForm] = useState({ email: '', password: '', code: '' });
   const [challenge, setChallenge] = useState(null);
+  const [emailHint, setEmailHint] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,7 +35,7 @@ function LoginPage() {
     e.preventDefault(); setError(''); setBusy(true);
     try {
       const result = await login({ email: form.email.trim(), password: form.password });
-      if (result?.requires_2fa) { setChallenge(result.challenge_id); setStep('2fa'); }
+      if (result?.requires_2fa) { setChallenge(result.challenge_id); setEmailHint(result.email_hint || 'tu correo'); setStep('2fa'); }
     } catch (err) { setError(err.message || 'No se pudo iniciar sesión.'); }
     finally { setBusy(false); }
   }
@@ -52,7 +53,7 @@ function LoginPage() {
       <section className="login-brand-panel">
         <div className="login-brand"><span className="inka-brand-mark"><Icon name="shield" size={20}/></span><span className="inka-brand-word">Inka<span>Sec</span></span></div>
         <div className="login-message"><span className="eyebrow">CAPACITACIÓN QUE SE CONVIERTE EN HÁBITO</span><h1>Seguridad digital, <em>sin complicaciones.</em></h1><p>Aprende a reconocer riesgos reales, practica con escenarios breves y fortalece la seguridad de tu organización.</p></div>
-        <div className="login-trust"><div><Icon name="lock" size={18}/><span><strong>Acceso protegido</strong><small>Sesión corporativa y 2FA para roles críticos</small></span></div><div><Icon name="shield" size={18}/><span><strong>Privacidad por diseño</strong><small>El navegador no almacena tokens de producción</small></span></div></div>
+        <div className="login-trust"><div><Icon name="lock" size={18}/><span><strong>Acceso protegido</strong><small>Sesión corporativa y código al correo para roles críticos</small></span></div><div><Icon name="shield" size={18}/><span><strong>Privacidad por diseño</strong><small>El navegador no almacena tokens de producción</small></span></div></div>
       </section>
 
       <section className="login-form-panel">
@@ -67,10 +68,11 @@ function LoginPage() {
             </form>
           ) : (
             <form onSubmit={submit2FA}>
-              <span className="security-seal"><Icon name="lock" size={25}/></span><span className="eyebrow">VERIFICACIÓN EN DOS PASOS</span><h2>Confirma que eres tú</h2><p className="form-intro">Ingresa el código de 6 dígitos de tu aplicación de autenticación.</p>
+              <span className="security-seal"><Icon name="lock" size={25}/></span><span className="eyebrow">VERIFICACIÓN EN DOS PASOS</span><h2>Confirma que eres tú</h2><p className="form-intro">Enviamos un código de 6 dígitos a <strong>{emailHint}</strong>. Vence en 5 minutos.</p>
               <label>Código de seguridad<input className="otp-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '') })} placeholder="000000" required /></label>
               {error && <div className="form-error" role="alert">{error}</div>}
               <button className="btn btn-primary btn-block btn-lg" disabled={busy || form.code.length !== 6}>{busy ? 'Verificando…' : 'Verificar y entrar'}</button>
+              <p className="form-note">¿No llegó? Revisa spam o vuelve a iniciar sesión para recibir uno nuevo.</p>
               <button className="text-link" type="button" onClick={() => { setStep('credentials'); setError(''); setForm({ ...form, code: '' }); }}>Volver al inicio de sesión</button>
             </form>
           )}
@@ -80,11 +82,11 @@ function LoginPage() {
   );
 }
 
-function WorkerHome({ data, setView, onOpen }) {
+function WorkerHome({ data, setView, onOpen, onChallenge }) {
   return <>
     <section className="page-hero compact-hero"><div><span className="eyebrow">TU RUTA DE APRENDIZAJE</span><h1>Aprende a protegerte <span>con decisiones simples.</span></h1><p>Continúa donde lo dejaste y practica con situaciones reales de tu trabajo.</p><div className="hero-actions"><button className="btn btn-primary" onClick={() => setView('modulos')}>Continuar aprendiendo <Icon name="chevron" size={17}/></button><button className="btn btn-secondary" onClick={() => setView('progreso')}>Ver mi progreso</button></div></div><article className="progress-summary"><div className="progress-ring" style={{ '--value': `${data.progress * 3.6}deg` }}><span><strong>{data.progress}%</strong><small>completado</small></span></div><div><small>Avance general</small><h3>Tu constancia está dando resultados</h3><p>Completa 2 módulos más para finalizar la ruta básica.</p></div></article></section>
     <section className="stats-grid">{data.stats.map((item) => <StatCard key={item.label} item={item}/>)}</section>
-    <section className="two-col-grid"><article className="panel"><div className="panel-head"><div><span className="eyebrow">ASIGNADOS A TI</span><h2>Continúa aprendiendo</h2></div><button className="text-button" onClick={() => setView('modulos')}>Ver todos</button></div><ModuleList modules={data.modules} onOpen={onOpen} /></article><ChallengeCard challenge={data.challenge}/></section>
+    <section className="two-col-grid"><article className="panel"><div className="panel-head"><div><span className="eyebrow">ASIGNADOS A TI</span><h2>Continúa aprendiendo</h2></div><button className="text-button" onClick={() => setView('modulos')}>Ver todos</button></div><ModuleList modules={data.modules} onOpen={onOpen} /></article><ChallengeCard challenge={data.challenge} onResolve={onChallenge}/></section>
     <section className="two-col-grid lower"><article className="panel"><div className="panel-head"><div><span className="eyebrow">MEJORA CONTINUA</span><h2>Temas a reforzar</h2></div></div><div className="topic-list">{data.weakTopics.map((item) => <div key={item.name}><span className="topic-icon"><Icon name={item.icon}/></span><div><strong>{item.name}</strong><small>{item.errors} errores recientes</small></div><div className="topic-score"><b>{item.score}%</b><ProgressBar value={item.score}/></div></div>)}</div></article><article className="panel certificate-card"><span className="certificate-mark"><Icon name="award" size={28}/></span><span className="eyebrow">CERTIFICACIÓN</span><h2>Fundamentos de seguridad digital</h2><p>Tu certificado se habilitará al completar la ruta y aprobar los retos requeridos.</p><button className="btn btn-secondary" onClick={() => setView('certificados')}>Ver certificado</button></article></section>
   </>;
 }
@@ -101,7 +103,7 @@ function ModuleList({ modules, onOpen }) {
           <div className="module-copy">
             <div className="module-topline">
               <span>{module.topic}</span>
-              <small>Vence {module.due}</small>
+              <small>{module.due}</small>
             </div>
 
             <h3>{module.title}</h3>
@@ -127,330 +129,338 @@ function ModuleList({ modules, onOpen }) {
   );
 }
 
-function ChallengeCard({ challenge }) {
+function ChallengeCard({ challenge, onResolve }) {
   if (!challenge) return <article className="panel challenge-card"><EmptyState title="Sin retos pendientes" description="Cuando haya un nuevo reto asignado aparecerá aquí."/></article>;
-  return <article className="panel challenge-card"><div className="challenge-tag"><Icon name="target" size={16}/> Reto de la semana <b>+{challenge.points} pts</b></div><span className="challenge-icon"><Icon name="shield" size={34}/></span><h2>{challenge.title}</h2><p>{challenge.description}</p><div className="challenge-meta"><span>{challenge.time}</span><span>Vence en {challenge.due}</span></div><button className="btn btn-primary btn-block">Resolver reto</button></article>;
+  return <article className="panel challenge-card"><div className="challenge-tag"><Icon name="target" size={16}/> Reto de la semana</div><span className="challenge-icon"><Icon name="shield" size={34}/></span><h2>{challenge.title}</h2><p>{challenge.description}</p><div className="challenge-meta"><span>{challenge.time}</span><span>{challenge.due}</span></div><button className="btn btn-primary btn-block" onClick={() => onResolve?.(challenge)}>Resolver reto</button></article>;
 }
 
-function ModulePlayer({ moduleId, onBack }) {
+const LESSON_STEPS = ['Diagnóstico', 'Aprende', 'Practica', 'Oportunidad', 'Motivación', 'Acción'];
+const LIKERT = [
+  { value: 1, label: 'Totalmente en desacuerdo' },
+  { value: 2, label: 'En desacuerdo' },
+  { value: 3, label: 'Neutral' },
+  { value: 4, label: 'De acuerdo' },
+  { value: 5, label: 'Totalmente de acuerdo' },
+];
+const MIN_REFLECTION = 5;
+
+function LessonStepper({ step }) {
+  return (
+    <ol className="lesson-stepper" aria-label="Pasos del módulo">
+      {LESSON_STEPS.map((label, index) => (
+        <li key={label} className={index < step ? 'is-done' : index === step ? 'is-current' : ''} aria-current={index === step ? 'step' : undefined}>
+          <span>{index < step ? '✓' : index + 1}</span>
+          {label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Feedback({ result, correctText }) {
+  return (
+    <div className={`feedback-box ${result.is_correct ? 'is-correct' : 'is-wrong'}`} role="status">
+      <strong>{result.is_correct ? '¡Correcto!' : 'Revisa esta respuesta'}</strong>
+      {!result.is_correct && correctText && <p>Respuesta correcta: {correctText}</p>}
+      {result.feedback && <p>{result.feedback}</p>}
+    </div>
+  );
+}
+
+function ModulePlayer({ moduleId, onBack, onChanged }) {
   const [module, setModule] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [step, setStep] = useState(0);
   const [diagnostic, setDiagnostic] = useState({});
   const [answers, setAnswers] = useState({});
+  const [grade, setGrade] = useState(null);
+  const [reflections, setReflections] = useState({ oportunidad: '', motivacion: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-
-    api.worker
-      .module(moduleId)
+    api.worker.module(moduleId)
       .then((data) => {
-        if (active) setModule(data);
+        if (!active) return;
+        setModule(data);
+        setReflections({ oportunidad: data.saved_reflections?.oportunidad || '', motivacion: data.saved_reflections?.motivacion || '' });
       })
-      .catch((err) => {
-        if (active) setError(err.message);
-      });
-
-    return () => {
-      active = false;
-    };
+      .catch((err) => { if (active) setLoadError(err.message); });
+    return () => { active = false; };
   }, [moduleId]);
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="fatal-state inside">
         <h2>No se pudo cargar el módulo</h2>
-        <p>{error}</p>
-        <button className="btn btn-secondary" onClick={onBack}>
-          Volver
-        </button>
+        <p>{loadError}</p>
+        <button className="btn btn-secondary" onClick={onBack}>Volver</button>
       </div>
     );
   }
+  if (!module) return <LoadingScreen/>;
 
-  if (!module) {
-    return <LoadingScreen/>;
+  async function run(action, nextStep) {
+    setBusy(true); setError('');
+    try {
+      await action();
+      if (nextStep !== undefined) setStep(nextStep);
+    } catch (err) {
+      setError(err.message || 'No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function saveDiagnostic() {
-    const responses = module.diagnostic.map((item) => ({
-      dimension: item.dimension,
-      code: item.code,
-      value: Number(diagnostic[item.code]),
-    }));
+  const diagnosticComplete = module.diagnostic.every((item) => diagnostic[item.code]);
+  const capacityComplete = module.capacity_questions.every((_, index) => answers[index] !== undefined);
+  const reflectionOk = (key) => reflections[key].trim().length >= MIN_REFLECTION;
 
-    if (responses.some((item) => !item.value)) {
-      setError('Responde todas las preguntas antes de continuar.');
-      return;
-    }
+  function saveDiagnostic() {
+    if (!diagnosticComplete) return setError('Responde todas las afirmaciones para continuar.');
+    return run(() => api.worker.saveComb(moduleId, {
+      phase: 'pre',
+      responses: module.diagnostic.map((item) => ({ dimension: item.dimension, code: item.code, value: Number(diagnostic[item.code]) })),
+    }), 1);
+  }
 
-    setBusy(true);
-    setError('');
-
-    try {
-      await api.worker.saveComb(moduleId, {
-        phase: 'pre',
-        responses,
+  function checkCapacity() {
+    return run(async () => {
+      const result = await api.worker.gradeCapacity(moduleId, {
+        answers: module.capacity_questions.map((_, index) => ({ index, choice: Number(answers[index]) })),
       });
-
-      setStep(1);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+      setGrade(result);
+    });
   }
 
-  async function finishModule() {
-    setBusy(true);
+  function saveReflection(key, nextStep) {
+    if (!reflectionOk(key)) return setError(`Escribe al menos ${MIN_REFLECTION} caracteres para continuar.`);
+    return run(() => api.worker.saveReflections(moduleId, {
+      responses: [{ prompt_code: key, text: reflections[key].trim() }],
+    }), nextStep);
+  }
 
-    try {
+  function finishModule() {
+    return run(async () => {
       await api.worker.completeModule(moduleId);
-
-      setStep(6);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await onChanged?.();
+    }, 6);
   }
+
+  const alert = error && <div className="form-error" role="alert">{error}</div>;
 
   return (
-    <GenericPage
-      eyebrow={module.topic}
-      title={module.title}
-      description={module.behavior_objective}
-    >
-      <article className="panel spaced-panel">
+    <GenericPage eyebrow={module.topic} title={module.title} description={module.behavior_objective}>
+      <article className="panel lesson-panel">
+        <button className="text-button" onClick={onBack}>← Volver a mis módulos</button>
 
-        <button className="text-button" onClick={onBack}>
-          ← Volver a mis módulos
-        </button>
-
-        <p>
-          Paso {Math.min(step + 1, 6)} de 6
-        </p>
-
-        <ProgressBar
-          value={step >= 6 ? 100 : ((step + 1) / 6) * 100}
-        />
+        {step < 6 && <>
+          <LessonStepper step={step}/>
+          <ProgressBar value={((step + 1) / LESSON_STEPS.length) * 100}/>
+        </>}
 
         {step === 0 && (
-          <section>
-            <h2>Diagnóstico inicial</h2>
-            <p>
-              Indica cuánto estás de acuerdo con cada afirmación.
-            </p>
-
-            {module.diagnostic.map((item) => (
-              <div key={item.code} className="module-question">
-                <p>{item.statement}</p>
-
-                <select
-                  value={diagnostic[item.code] || ''}
-                  onChange={(e) =>
-                    setDiagnostic({
-                      ...diagnostic,
-                      [item.code]: e.target.value,
-                    })
-                  }
-                >
-                  <option value="">Selecciona</option>
-                  <option value="1">1 - Totalmente en desacuerdo</option>
-                  <option value="2">2 - En desacuerdo</option>
-                  <option value="3">3 - Neutral</option>
-                  <option value="4">4 - De acuerdo</option>
-                  <option value="5">5 - Totalmente de acuerdo</option>
-                </select>
-              </div>
+          <section className="lesson-step">
+            <span className="eyebrow">DIAGNÓSTICO INICIAL</span>
+            <h2>¿Qué tan seguro te sientes hoy?</h2>
+            <p className="lesson-lead">Indica qué tanto te identificas con cada afirmación. No hay respuestas buenas ni malas.</p>
+            {module.diagnostic.map((item, index) => (
+              <fieldset className="likert-item" key={item.code}>
+                <legend><span className="likert-number">{index + 1}</span>{item.statement}</legend>
+                <div className="likert-scale" role="radiogroup" aria-label={item.statement}>
+                  {LIKERT.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={Number(diagnostic[item.code]) === option.value}
+                      title={option.label}
+                      className={`likert-option ${Number(diagnostic[item.code]) === option.value ? 'is-selected' : ''}`}
+                      onClick={() => setDiagnostic({ ...diagnostic, [item.code]: option.value })}
+                    >
+                      <b>{option.value}</b>
+                      <small>{option.label}</small>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
             ))}
-
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={saveDiagnostic}
-            >
-              Continuar
-            </button>
+            {alert}
+            <div className="lesson-actions">
+              <button className="btn btn-primary" disabled={busy} onClick={saveDiagnostic}>{busy ? 'Guardando…' : 'Continuar'}</button>
+            </div>
           </section>
         )}
 
         {step === 1 && (
-          <section>
+          <section className="lesson-step">
             <span className="eyebrow">MICROLECCIÓN</span>
-
             <h2>Aprende lo esencial</h2>
-
-            <p>{module.micro_lesson}</p>
-
-            <button
-              className="btn btn-primary"
-              onClick={() => setStep(2)}
-            >
-              Continuar
-            </button>
+            <div className="lesson-callout"><Icon name="shield" size={20}/><p>{module.micro_lesson}</p></div>
+            <div className="lesson-actions"><button className="btn btn-primary" onClick={() => setStep(2)}>Continuar</button></div>
           </section>
         )}
 
         {step === 2 && (
-          <section>
-            <span className="eyebrow">CAPACIDAD</span>
-
+          <section className="lesson-step">
+            <span className="eyebrow">PRACTICA</span>
             <h2>Pon a prueba lo aprendido</h2>
-
-            {module.capacity_questions.map((question, index) => (
-              <div className="module-question" key={index}>
-                <p>
-                  <strong>{question.prompt}</strong>
-                </p>
-
-                {question.options.map((option, optionIndex) => (
-                  <label key={optionIndex}>
-                    <input
-                      type="radio"
-                      name={`question-${index}`}
-                      value={optionIndex}
-                      checked={
-                        Number(answers[index]) === optionIndex
-                      }
-                      onChange={(e) =>
-                        setAnswers({
-                          ...answers,
-                          [index]: e.target.value,
-                        })
-                      }
-                    />
-
-                    {' '}
-                    {option}
-                  </label>
-                ))}
-              </div>
+            {module.capacity_questions.map((question, qi) => (
+              <fieldset className="quiz-item" key={qi}>
+                <legend><span className="likert-number">{qi + 1}</span>{question.prompt}</legend>
+                <div className="choice-list" role="radiogroup" aria-label={question.prompt}>
+                  {question.options.map((option, oi) => (
+                    <button
+                      key={oi}
+                      type="button"
+                      role="radio"
+                      aria-checked={Number(answers[qi]) === oi}
+                      disabled={busy}
+                      className={`choice ${Number(answers[qi]) === oi ? 'is-selected' : ''}`}
+                      onClick={() => { setAnswers({ ...answers, [qi]: oi }); setGrade(null); }}
+                    >
+                      <span className="choice-dot" aria-hidden="true"/>
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                {grade && <Feedback result={grade.results[qi]} correctText={question.options[grade.results[qi].correct_index]}/>}
+              </fieldset>
             ))}
-
-            <button
-              className="btn btn-primary"
-              disabled={
-                Object.keys(answers).length !==
-                module.capacity_questions.length
-              }
-              onClick={() => setStep(3)}
-            >
-              Continuar
-            </button>
+            {grade && <p className="lesson-score">Respondiste {grade.correct} de {grade.total} correctamente.</p>}
+            {alert}
+            <div className="lesson-actions">
+              {!grade
+                ? <button className="btn btn-secondary" disabled={!capacityComplete || busy} onClick={checkCapacity}>{busy ? 'Revisando…' : 'Revisar respuestas'}</button>
+                : <button className="btn btn-primary" onClick={() => setStep(3)}>Continuar</button>}
+            </div>
           </section>
         )}
 
-        {step === 3 && (
-          <section>
-            <span className="eyebrow">OPORTUNIDAD</span>
-
-            <h2>Identifica tus barreras</h2>
-
-            <p>{module.opportunity_question}</p>
-
-            <textarea
-              rows="5"
-              placeholder="Escribe brevemente tu respuesta..."
-            />
-
-            <button
-              className="btn btn-primary"
-              onClick={() => setStep(4)}
-            >
-              Continuar
-            </button>
-          </section>
-        )}
-
-        {step === 4 && (
-          <section>
-            <span className="eyebrow">MOTIVACIÓN</span>
-
-            <h2>Piensa en las consecuencias</h2>
-
-            <p>{module.motivation_question}</p>
-
-            <textarea
-              rows="5"
-              placeholder="Escribe brevemente tu respuesta..."
-            />
-
-            <button
-              className="btn btn-primary"
-              onClick={() => setStep(5)}
-            >
-              Continuar
-            </button>
+        {(step === 3 || step === 4) && (
+          <section className="lesson-step">
+            <span className="eyebrow">{step === 3 ? 'OPORTUNIDAD' : 'MOTIVACIÓN'}</span>
+            <h2>{step === 3 ? 'Identifica tus barreras' : 'Piensa en las consecuencias'}</h2>
+            <p className="lesson-lead">{step === 3 ? module.opportunity_question : module.motivation_question}</p>
+            <label className="reflection-field">
+              <span className="sr-only">Tu respuesta</span>
+              <textarea
+                className="reflection"
+                rows="5"
+                maxLength={1000}
+                placeholder="Escribe con tus palabras. Unas líneas bastan."
+                value={reflections[step === 3 ? 'oportunidad' : 'motivacion']}
+                onChange={(e) => setReflections({ ...reflections, [step === 3 ? 'oportunidad' : 'motivacion']: e.target.value })}
+              />
+            </label>
+            <div className="textarea-meta">{reflections[step === 3 ? 'oportunidad' : 'motivacion'].length}/1000</div>
+            {alert}
+            <div className="lesson-actions">
+              <button
+                className="btn btn-primary"
+                disabled={busy || !reflectionOk(step === 3 ? 'oportunidad' : 'motivacion')}
+                onClick={() => saveReflection(step === 3 ? 'oportunidad' : 'motivacion', step + 1)}
+              >
+                {busy ? 'Guardando…' : 'Guardar y continuar'}
+              </button>
+            </div>
           </section>
         )}
 
         {step === 5 && (
-          <section>
+          <section className="lesson-step">
             <span className="eyebrow">ACCIÓN REAL</span>
-
             <h2>Llévalo a tu trabajo</h2>
-
-            <p>{module.real_action}</p>
-
-            <div className="insight-box">
-              <p>
-                El siguiente refuerzo estará programado para los días{' '}
-                {module.reinforcement_days.join(', ')}.
-              </p>
+            <div className="lesson-callout is-action"><Icon name="check" size={20}/><p>{module.real_action}</p></div>
+            <div className="lesson-note"><Icon name="clock" size={16}/><span>Te recordaremos este módulo en {module.reinforcement_days.join(', ')} días.</span></div>
+            {alert}
+            <div className="lesson-actions">
+              <button className="btn btn-primary" disabled={busy} onClick={finishModule}>{busy ? 'Guardando…' : 'Finalizar módulo'}</button>
             </div>
-
-            {error && (
-              <div className="form-error">
-                {error}
-              </div>
-            )}
-
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={finishModule}
-            >
-              {busy ? 'Guardando…' : 'Finalizar módulo'}
-            </button>
           </section>
         )}
 
         {step === 6 && (
-          <section>
-            <span className="security-seal">
-              <Icon name="check" size={30}/>
-            </span>
-
+          <section className="lesson-step lesson-done">
+            <span className="security-seal"><Icon name="check" size={30}/></span>
             <h2>Módulo completado</h2>
-
-            <p>
-              Tu progreso y resultado fueron guardados correctamente.
-            </p>
-
-            <button
-              className="btn btn-primary"
-              onClick={onBack}
-            >
-              Volver a mis módulos
-            </button>
+            <p className="lesson-lead">Tu avance y tus respuestas quedaron guardados.</p>
+            <div className="lesson-actions"><button className="btn btn-primary" onClick={onBack}>Volver a mis módulos</button></div>
           </section>
         )}
-
       </article>
     </GenericPage>
   );
 }
 
-function WorkerViews({ data, view, setView }) {
+function ChallengePlayer({ challenge, onBack, onDone }) {
+  const [choice, setChoice] = useState(null);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setBusy(true); setError('');
+    try { setResult(await api.worker.answerChallenge(challenge.id, { choice })); }
+    catch (err) { setError(err.message || 'No se pudo enviar tu respuesta.'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <GenericPage eyebrow={challenge.topic || 'RETO PRÁCTICO'} title={challenge.title} description="Lee el caso y elige la decisión que tomarías. Solo tienes un intento.">
+      <article className="panel lesson-panel">
+        <button className="text-button" onClick={onBack}>← Volver</button>
+        <div className="scenario-box"><Icon name="target" size={20}/><p>{challenge.description}</p></div>
+        <div className="choice-list" role="radiogroup" aria-label="Opciones del reto">
+          {challenge.options.map((option, index) => {
+            const isCorrect = result && result.correct_index === index;
+            const isWrong = result && !result.is_correct && choice === index;
+            const classes = ['choice', choice === index && 'is-selected', isCorrect && 'is-correct', isWrong && 'is-wrong'].filter(Boolean).join(' ');
+            return (
+              <button key={index} type="button" role="radio" aria-checked={choice === index} disabled={Boolean(result) || busy} className={classes} onClick={() => setChoice(index)}>
+                <span className="choice-letter" aria-hidden="true">{String.fromCharCode(65 + index)}</span>
+                {option}
+              </button>
+            );
+          })}
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        {result ? (
+          <>
+            <Feedback result={result}/>
+            <div className="lesson-actions"><button className="btn btn-primary" onClick={onDone}>Volver al inicio</button></div>
+          </>
+        ) : (
+          <div className="lesson-actions">
+            <button className="btn btn-primary" disabled={choice === null || busy} onClick={submit}>{busy ? 'Enviando…' : 'Enviar respuesta'}</button>
+          </div>
+        )}
+      </article>
+    </GenericPage>
+  );
+}
+
+function WorkerViews({ data, view, setView, onRefresh }) {
   const [selectedModule, setSelectedModule] = useState(null);
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
 
   if (selectedModule) {
     return (
       <ModulePlayer
         moduleId={selectedModule}
         onBack={() => setSelectedModule(null)}
+        onChanged={onRefresh}
+      />
+    );
+  }
+
+  if (selectedChallenge) {
+    return (
+      <ChallengePlayer
+        challenge={selectedChallenge}
+        onBack={() => { setSelectedChallenge(null); onRefresh?.(); }}
+        onDone={() => { setSelectedChallenge(null); onRefresh?.(); }}
       />
     );
   }
@@ -461,6 +471,7 @@ function WorkerViews({ data, view, setView }) {
         data={data}
         setView={setView}
         onOpen={setSelectedModule}
+        onChallenge={setSelectedChallenge}
       />
     );
   }
@@ -478,6 +489,34 @@ function WorkerViews({ data, view, setView }) {
             onOpen={setSelectedModule}
           />
         </article>
+      </GenericPage>
+    );
+  }
+
+  if (view === 'retos') {
+    const challenges = data.challenges || [];
+    return (
+      <GenericPage
+        eyebrow="PRÁCTICA"
+        title="Mis retos"
+        description="Escenarios cortos para decidir cómo actuarías en tu trabajo. Cada reto se responde una sola vez."
+      >
+        <section className="challenge-list">
+          {challenges.length === 0
+            ? <article className="panel"><EmptyState title="Sin retos asignados" description="Cuando tu gestor publique un reto para ti, aparecerá aquí."/></article>
+            : challenges.map((item) => (
+              <article className="panel challenge-row" key={item.id}>
+                <div>
+                  <span className="eyebrow">{item.topic}</span>
+                  <h2>{item.title}</h2>
+                  <p className="muted-text">{item.due}</p>
+                </div>
+                {item.answered
+                  ? <span className={`status ${item.is_correct ? 'status-publicado' : 'status-borrador'}`}>{item.is_correct ? 'Respondido · correcto' : 'Respondido · revisar'}</span>
+                  : <button className="btn btn-primary" onClick={() => setSelectedChallenge(item)}>Responder</button>}
+              </article>
+            ))}
+        </section>
       </GenericPage>
     );
   }
@@ -542,24 +581,172 @@ function WorkerViews({ data, view, setView }) {
       data={data}
       setView={setView}
       onOpen={setSelectedModule}
+      onChallenge={setSelectedChallenge}
     />
   );
 }
 
-function ManagerHome({ data, onCreate }) {
-  return <><section className="page-heading"><div><span className="eyebrow">PANEL DE CONTENIDO</span><h1>Contenido útil, claro y <span>medible.</span></h1><p>Crea experiencias breves, asígnalas a la organización y revisa qué está funcionando.</p></div><button className="btn btn-primary" onClick={onCreate}>Crear contenido</button></section><section className="stats-grid">{data.stats.map((item) => <StatCard key={item.label} item={item}/>)}</section><section className="two-col-grid manager-grid"><ContentTable rows={data.content}/><article className="panel"><span className="eyebrow">ANÁLISIS</span><h2>Temas con más errores</h2><div className="error-bars">{data.topicErrors.map((item) => <div key={item.topic}><div><span>{item.topic}</span><b>{item.errorRate}% error</b></div><ProgressBar value={item.errorRate} danger/></div>)}</div><div className="insight-box"><Icon name="shield" size={18}/><p><strong>Phishing necesita refuerzo.</strong> Considera una segunda actividad práctica para las áreas con mayor tasa de error.</p></div></article></section></>;
+const MANAGER_VIEWS = ['inicio', 'contenido', 'retos', 'asignaciones', 'estadisticas'];
+const STATUS_OPTIONS = [{ value: 'draft', label: 'Borrador' }, { value: 'published', label: 'Publicado' }, { value: 'archived', label: 'Archivado' }];
+const dateLabel = (value) => (value ? new Date(value).toLocaleDateString('es-PE', { dateStyle: 'medium' }) : '—');
+
+async function loadManagerPanel(view) {
+  const [dashboard, catalog] = await Promise.all([api.manager.dashboard(), api.manager.topics()]);
+  const panel = { ...dashboard, topics: catalog.topics };
+  if (view === 'asignaciones') {
+    const [assignable, assignments] = await Promise.all([api.manager.assignable(), api.manager.assignments()]);
+    return { ...panel, assignable, assignments };
+  }
+  if (view === 'estadisticas') return { ...panel, stats: await api.manager.stats() };
+  return panel;
 }
 
-function ContentTable({ rows }) {
-  return <article className="panel"><div className="panel-head"><div><span className="eyebrow">BIBLIOTECA</span><h2>Contenido reciente</h2></div></div><div className="table-wrap"><table><thead><tr><th>Contenido</th><th>Tipo</th><th>Estado</th><th>Asignados</th><th>Aprobación</th><th>Actualizado</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.title}</strong></td><td>{row.type}</td><td><span className={`status status-${row.status.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')}`}>{row.status}</span></td><td>{row.users}</td><td>{row.success == null ? '—' : `${row.success}%`}</td><td>{row.updated}</td></tr>)}</tbody></table></div></article>;
+function ContentTable({ rows, onEdit, empty = 'Aún no hay contenido con estos filtros.' }) {
+  if (!rows.length) return <EmptyState title="Nada por aquí" description={empty}/>;
+  return <div className="table-wrap"><table><thead><tr><th>Contenido</th><th>Tema</th><th>Tipo</th><th>Estado</th><th>Público</th><th>Aprobación</th><th>Actualizado</th><th><span className="sr-only">Acción</span></th></tr></thead><tbody>{rows.map((row) => <tr key={`${row.kind}-${row.id}`}><td><strong>{row.title}</strong></td><td>{row.topic}</td><td>{row.type}</td><td><span className={`status status-${row.status.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')}`}>{row.status}</span></td><td>{row.users ?? '—'}</td><td>{row.success == null ? '—' : `${row.success}%`}</td><td>{dateLabel(row.updated)}</td><td>{row.editable ? <button type="button" className="text-button" onClick={() => onEdit?.(row)}>Editar</button> : <span className="muted-text">Base</span>}</td></tr>)}</tbody></table></div>;
 }
 
-function ManagerViews({ data, view, onCreate }) {
-  if (view === 'inicio') return <ManagerHome data={data} onCreate={onCreate}/>;
-  if (view === 'contenido') return <GenericPage eyebrow="BIBLIOTECA" title="Contenido" description="Crea, edita, publica y organiza módulos en lenguaje sencillo."><div className="page-toolbar"><button className="btn btn-primary" onClick={onCreate}>Crear contenido</button></div><ContentTable rows={data.content}/></GenericPage>;
-  if (view === 'retos') return <GenericPage eyebrow="PRÁCTICA" title="Retos" description="Gestiona escenarios prácticos basados en situaciones reales del entorno laboral."><article className="panel"><EmptyState title="Panel de retos preparado" description="Conecta GET /manager/challenges para mostrar y administrar los retos desde FastAPI."/></article></GenericPage>;
-  if (view === 'asignaciones') return <GenericPage eyebrow="PLANIFICACIÓN" title="Asignaciones" description="Define audiencia, área y fecha límite para cada módulo o reto."><article className="panel"><EmptyState title="Asignaciones centralizadas" description="Conecta POST /manager/assignments para programar contenido por usuario o área."/></article></GenericPage>;
-  return <GenericPage eyebrow="ANALÍTICA" title="Estadísticas" description="Mide aprobación, errores frecuentes y efectividad del contenido."><article className="panel"><div className="error-bars">{data.topicErrors.map((item) => <div key={item.topic}><div><span>{item.topic}</span><b>{item.errorRate}% error</b></div><ProgressBar value={item.errorRate} danger/></div>)}</div></article></GenericPage>;
+function TopicErrors({ items }) {
+  if (!items.length) return <EmptyState title="Sin datos todavía" description="Aparecerán cuando tus trabajadores respondan retos."/>;
+  return <div className="error-bars">{items.map((item) => <div key={item.topic}><div><span>{item.topic}</span><b>{item.errorRate ?? 0}% error</b></div><ProgressBar value={item.errorRate ?? 0} danger/></div>)}</div>;
+}
+
+function ManagerHome({ data, onNew, onEdit }) {
+  const recent = [...data.content, ...data.challenges].sort((a, b) => (b.updated || '').localeCompare(a.updated || '')).slice(0, 8);
+  const worst = data.topicErrors[0];
+  return <>
+    <section className="page-heading"><div><span className="eyebrow">PANEL DE CONTENIDO</span><h1>Contenido útil, claro y <span>medible.</span></h1><p>Crea experiencias breves, asígnalas a tu equipo y revisa qué está funcionando.</p></div><div className="hero-actions"><button className="btn btn-primary" onClick={() => onNew('module')}>Crear módulo</button><button className="btn btn-secondary" onClick={() => onNew('challenge')}>Crear reto</button></div></section>
+    <section className="stats-grid">{data.stats.map((item) => <StatCard key={item.label} item={item}/>)}</section>
+    <section className="two-col-grid manager-grid">
+      <article className="panel"><div className="panel-head"><div><span className="eyebrow">BIBLIOTECA</span><h2>Contenido reciente</h2></div></div><ContentTable rows={recent} onEdit={onEdit}/></article>
+      <article className="panel"><span className="eyebrow">ANÁLISIS</span><h2>Temas con más errores</h2><TopicErrors items={data.topicErrors}/>{worst && <div className="insight-box"><Icon name="shield" size={18}/><p><strong>{worst.topic} necesita refuerzo.</strong> Considera una segunda actividad práctica para las áreas con mayor tasa de error.</p></div>}</article>
+    </section>
+  </>;
+}
+
+function ManagerLibrary({ kind, data, onNew, onEdit }) {
+  const [query, setQuery] = useState('');
+  const [topic, setTopic] = useState('');
+  const [status, setStatus] = useState('');
+  const isModule = kind === 'module';
+  const term = query.trim().toLowerCase();
+  const rows = (isModule ? data.content : data.challenges).filter((row) =>
+    (!topic || row.topic === topic) && (!status || row.status === status) && row.title.toLowerCase().includes(term));
+  return <GenericPage eyebrow="BIBLIOTECA" title={isModule ? 'Contenido' : 'Retos'} description={isModule ? 'Crea y edita módulos en lenguaje sencillo, organizados por tema.' : 'Escenarios prácticos basados en situaciones reales del trabajo.'}>
+    <article className="panel">
+      <div className="manager-toolbar">
+        <input className="table-search" type="search" aria-label="Buscar por título" placeholder="Buscar por título…" value={query} onChange={(e) => setQuery(e.target.value)}/>
+        <select aria-label="Filtrar por tema" value={topic} onChange={(e) => setTopic(e.target.value)}><option value="">Todos los temas</option>{data.topics.map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label="Filtrar por estado" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Todos los estados</option><option>Publicado</option><option>Borrador</option><option>Archivado</option></select>
+        <button className="btn btn-primary" onClick={() => onNew(kind)}>{isModule ? 'Nuevo módulo' : 'Nuevo reto'}</button>
+      </div>
+      <ContentTable rows={rows} onEdit={onEdit} empty={isModule ? 'Crea tu primer módulo o ajusta los filtros.' : 'Crea tu primer reto o ajusta los filtros.'}/>
+    </article>
+  </GenericPage>;
+}
+
+function ManagerAssignments({ data, onChanged }) {
+  const items = data.assignable || [];
+  const [form, setForm] = useState({ item: items[0] ? `${items[0].item_type}:${items[0].item_id}` : '', target: 'company', areaId: '', userId: '', due: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setError(''); setNotice('');
+    const [itemType, itemId] = form.item.split(':');
+    try {
+      await api.manager.createAssignment({
+        item_type: itemType, item_id: Number(itemId), target: form.target,
+        area_id: form.target === 'area' ? Number(form.areaId) : null,
+        user_id: form.target === 'user' ? Number(form.userId) : null,
+        due_at: form.due ? new Date(form.due).toISOString() : null,
+      });
+      setNotice('Asignación guardada.');
+      set('due', '');
+      onChanged();
+    } catch (err) { setError(err.message || 'No se pudo guardar la asignación.'); }
+    finally { setBusy(false); }
+  }
+
+  async function remove(id) {
+    setError(''); setNotice('');
+    try { await api.manager.deleteAssignment(id); onChanged(); }
+    catch (err) { setError(err.message || 'No se pudo quitar la asignación.'); }
+  }
+
+  return <GenericPage eyebrow="PLANIFICACIÓN" title="Asignaciones" description="Elige a quién llega cada módulo o reto y cuándo vence. Sin asignación, el contenido es para toda la empresa.">
+    {items.length === 0
+      ? <article className="panel"><EmptyState title="Nada publicado todavía" description="Publica un módulo o reto para poder asignarlo."/></article>
+      : <article className="panel">
+        <form className="modal-form assignment-form" onSubmit={submit}>
+          <div className="form-grid">
+            <label>Contenido<select value={form.item} onChange={(e) => set('item', e.target.value)}>{items.map((i) => <option key={`${i.item_type}:${i.item_id}`} value={`${i.item_type}:${i.item_id}`}>{i.item_type === 'module' ? 'Módulo' : 'Reto'} · {i.title}</option>)}</select></label>
+            <label>Para<select value={form.target} onChange={(e) => set('target', e.target.value)}><option value="company">Toda la empresa</option><option value="area">Un área</option><option value="user">Un trabajador</option></select></label>
+          </div>
+          {form.target === 'area' && <label>Área<select value={form.areaId} onChange={(e) => set('areaId', e.target.value)} required><option value="">Elige un área</option>{data.areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>}
+          {form.target === 'user' && <label>Trabajador<select value={form.userId} onChange={(e) => set('userId', e.target.value)} required><option value="">Elige un trabajador</option>{data.workers.map((w) => <option key={w.id} value={w.id}>{w.name} · {w.area}</option>)}</select></label>}
+          <label>Fecha límite (opcional)<input type="datetime-local" value={form.due} onChange={(e) => set('due', e.target.value)}/></label>
+          {error && <div className="form-error" role="alert">{error}</div>}
+          {notice && <p className="form-note">{notice}</p>}
+          <div className="modal-actions"><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Asignar'}</button></div>
+        </form>
+      </article>}
+    <article className="panel">
+      <div className="panel-head"><div><span className="eyebrow">ASIGNADOS</span><h2>Asignaciones activas</h2></div></div>
+      {(data.assignments || []).length === 0
+        ? <EmptyState title="Sin asignaciones" description="Lo que asignes aparecerá aquí con su fecha límite."/>
+        : <div className="table-wrap"><table><thead><tr><th>Contenido</th><th>Tipo</th><th>Para</th><th>Fecha límite</th><th><span className="sr-only">Acción</span></th></tr></thead><tbody>{data.assignments.map((a) => <tr key={a.id}><td><strong>{a.title}</strong></td><td>{a.item_type === 'module' ? 'Módulo' : 'Reto'}</td><td>{a.target}</td><td>{a.due}</td><td><button type="button" className="text-button danger-text" onClick={() => remove(a.id)}>Quitar</button></td></tr>)}</tbody></table></div>}
+    </article>
+  </GenericPage>;
+}
+
+function WorkerBreakdown({ kind, workers }) {
+  if (!workers.length) return <p className="muted-text">Nadie está en el público de este contenido todavía.</p>;
+  return <table className="inner-table"><thead><tr><th>Trabajador</th><th>Área</th><th>Estado</th></tr></thead><tbody>{workers.map((w) => <tr key={w.user_id}><td>{w.name}</td><td>{w.area}</td><td>{kind === 'module' ? (w.completed ? `Terminó el ${dateLabel(w.completed_at)}` : 'Pendiente') : (!w.answered ? 'Sin responder' : w.correct ? 'Correcto' : 'Incorrecto')}</td></tr>)}</tbody></table>;
+}
+
+function StatTable({ kind, rows, open, onToggle }) {
+  if (!rows.length) return <EmptyState title="Sin contenido propio" description="Crea un módulo o reto para ver aquí su desempeño."/>;
+  return <div className="table-wrap"><table><thead><tr><th>Título</th><th>Tema</th><th>Público</th><th>{kind === 'module' ? 'Terminaron' : 'Respondieron'}</th><th>{kind === 'module' ? '% completado' : '% acierto'}</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{rows.map((row) => {
+    const key = `${kind}-${row.id}`;
+    const answered = kind === 'module' ? row.completed : row.attempts;
+    const share = kind === 'module' ? row.completion_rate : row.success_rate;
+    return <Fragment key={key}><tr><td><strong>{row.title}</strong></td><td>{row.topic}</td><td>{row.audience}</td><td>{answered}</td><td>{share == null ? '—' : `${share}%`}</td><td><button type="button" className="text-button" aria-expanded={open === key} onClick={() => onToggle(key)}>{open === key ? 'Ocultar' : 'Ver trabajadores'}</button></td></tr>{open === key && <tr className="stat-detail"><td colSpan={6}><WorkerBreakdown kind={kind} workers={row.workers}/></td></tr>}</Fragment>;
+  })}</tbody></table></div>;
+}
+
+function ManagerStats({ data }) {
+  const [open, setOpen] = useState(null);
+  const modules = data.stats?.modules || [];
+  const challenges = data.stats?.challenges || [];
+  const toggle = (key) => setOpen((current) => (current === key ? null : key));
+  const completions = modules.reduce((sum, m) => sum + m.completed, 0);
+  const possible = modules.reduce((sum, m) => sum + m.audience, 0);
+  const attempts = challenges.reduce((sum, c) => sum + c.attempts, 0);
+  const correct = challenges.reduce((sum, c) => sum + c.correct, 0);
+  return <GenericPage eyebrow="ANALÍTICA" title="Estadísticas" description="Desempeño de lo que creaste, por contenido y por trabajador. Sirve para decidir qué reforzar.">
+    <section className="two-col-grid manager-grid">
+      <article className="panel"><span className="eyebrow">ANÁLISIS</span><h2>Temas con más errores</h2><TopicErrors items={data.stats?.topic_errors || []}/></article>
+      <article className="panel"><span className="eyebrow">RESUMEN</span><h2>Tu contenido</h2>
+        <p>Módulos creados: <strong>{modules.length}</strong> · Retos creados: <strong>{challenges.length}</strong></p>
+        <p>Módulos terminados: <strong>{completions}</strong> de {possible} posibles</p>
+        <p>Aciertos en retos: <strong>{attempts ? `${Math.round((correct * 100) / attempts)}%` : '—'}</strong> ({correct} de {attempts} respuestas)</p>
+      </article>
+    </section>
+    <article className="panel"><div className="panel-head"><div><span className="eyebrow">MÓDULOS</span><h2>Terminaciones por contenido</h2></div></div><StatTable kind="module" rows={modules} open={open} onToggle={toggle}/></article>
+    <article className="panel"><div className="panel-head"><div><span className="eyebrow">RETOS</span><h2>Respuestas por contenido</h2></div></div><StatTable kind="challenge" rows={challenges} open={open} onToggle={toggle}/></article>
+  </GenericPage>;
+}
+
+function ManagerViews({ data, view, onNew, onEdit, onChanged }) {
+  if (view === 'inicio') return <ManagerHome data={data} onNew={onNew} onEdit={onEdit}/>;
+  if (view === 'contenido') return <ManagerLibrary kind="module" data={data} onNew={onNew} onEdit={onEdit}/>;
+  if (view === 'retos') return <ManagerLibrary kind="challenge" data={data} onNew={onNew} onEdit={onEdit}/>;
+  if (view === 'asignaciones') return <ManagerAssignments data={data} onChanged={onChanged}/>;
+  return <ManagerStats data={data}/>;
 }
 
 const ADMIN_ROLES = { Trabajador: 'worker', Gestor: 'manager', 'Gestor de contenido': 'manager', Administrador: 'admin' };
@@ -634,10 +821,167 @@ function Modal({ title, onClose, children }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="modal-head"><div><span className="eyebrow">INKASEC</span><h2>{title}</h2></div><button type="button" className="round-button" onClick={onClose}>×</button></div>{children}</div></div>;
 }
 
-function ManagerCreateModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ title: '', type: 'Módulo', topic: 'Phishing', description: '' }); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  async function submit(e) { e.preventDefault(); setBusy(true); setError(''); try { const item = await api.manager.createContent(form); onCreated(item); onClose(); } catch (err) { setError(err.message); } finally { setBusy(false); } }
-  return <Modal title="Crear contenido" onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Título<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength={120}/></label><div className="form-grid"><label>Tipo<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option>Módulo</option><option>Reto</option></select></label><label>Tema<select value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })}><option>Phishing</option><option>Contraseñas</option><option>Wi-Fi público</option><option>2FA</option></select></label></div><label>Descripción<textarea rows="4" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required maxLength={500}/></label>{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar borrador'}</button></div></form></Modal>;
+const blankQuestion = () => ({ prompt: '', options: ['', ''], correct: 0, feedback: '' });
+const DEFAULT_OPPORTUNITY = '¿Qué te dificulta aplicar esto en tu trabajo?';
+const DEFAULT_MOTIVATION = '¿Por qué te importa este tema para tu trabajo?';
+
+function OptionsEditor({ name, options, correct, onText, onCorrect, onAdd, onRemove }) {
+  return <div className="option-editor">
+    {options.map((option, index) => <div className="option-row" key={index}>
+      <label className="option-pick"><input type="radio" name={name} checked={correct === index} onChange={() => onCorrect(index)}/><span>Correcta</span></label>
+      <input value={option} placeholder={`Opción ${index + 1}`} maxLength={200} aria-label={`Opción ${index + 1}`} onChange={(e) => onText(index, e.target.value)}/>
+      {options.length > 2 && <button type="button" className="text-button danger-text" onClick={() => onRemove(index)}>Quitar</button>}
+    </div>)}
+    {options.length < 4 && <button type="button" className="text-button" onClick={onAdd}>+ Agregar opción</button>}
+  </div>;
+}
+
+function ModuleEditor({ initial, topics, onDone, onClose }) {
+  const [form, setForm] = useState(() => initial
+    ? { ...initial, capacity_questions: initial.capacity_questions.length ? initial.capacity_questions : [blankQuestion()] }
+    : { title: '', topic: topics[0] || '', objective: '', micro_lesson: '', capacity_questions: [blankQuestion()], opportunity_question: DEFAULT_OPPORTUNITY, motivation_question: DEFAULT_MOTIVATION, real_action: '', status: 'draft' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const topicOptions = form.topic && !topics.includes(form.topic) ? [form.topic, ...topics] : topics;
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setQuestion = (index, patch) => setForm((prev) => ({ ...prev, capacity_questions: prev.capacity_questions.map((q, i) => (i === index ? { ...q, ...patch } : q)) }));
+  function removeOption(qIndex, oIndex) {
+    setForm((prev) => ({ ...prev, capacity_questions: prev.capacity_questions.map((q, i) => {
+      if (i !== qIndex) return q;
+      const correct = q.correct === oIndex ? 0 : q.correct > oIndex ? q.correct - 1 : q.correct;
+      return { ...q, options: q.options.filter((_, j) => j !== oIndex), correct };
+    }) }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setError('');
+    const payload = {
+      title: form.title.trim(), topic: form.topic, objective: form.objective.trim(), micro_lesson: form.micro_lesson.trim(),
+      capacity_questions: form.capacity_questions.map((q) => ({ prompt: q.prompt.trim(), options: q.options.map((o) => o.trim()), correct: q.correct, feedback: q.feedback.trim() })),
+      opportunity_question: form.opportunity_question.trim(), motivation_question: form.motivation_question.trim(),
+      real_action: form.real_action.trim(), status: form.status,
+    };
+    try {
+      if (initial) await api.manager.updateModule(initial.id, payload);
+      else await api.manager.createModule(payload);
+      onDone();
+    } catch (err) { setError(err.message || 'No se pudo guardar el módulo.'); }
+    finally { setBusy(false); }
+  }
+
+  return <form className="modal-form manager-editor" onSubmit={submit}>
+    <label>Título<input value={form.title} maxLength={180} required onChange={(e) => set('title', e.target.value)}/></label>
+    <div className="form-grid">
+      <label>Tema<select value={form.topic} onChange={(e) => set('topic', e.target.value)}>{topicOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
+      <label>Estado<select value={form.status} onChange={(e) => set('status', e.target.value)}>{STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+    </div>
+    <label>Conducta que quieres lograr<textarea rows={2} maxLength={400} required value={form.objective} onChange={(e) => set('objective', e.target.value)}/></label>
+    <label>Micro-lección en lenguaje sencillo<textarea rows={4} maxLength={1200} required value={form.micro_lesson} onChange={(e) => set('micro_lesson', e.target.value)}/></label>
+    <h3 className="editor-heading">Preguntas de capacidad (1 a 5)</h3>
+    {form.capacity_questions.map((q, index) => <fieldset className="question-card" key={index}>
+      <legend>Pregunta {index + 1}</legend>
+      <label>Enunciado<input value={q.prompt} maxLength={300} required onChange={(e) => setQuestion(index, { prompt: e.target.value })}/></label>
+      <OptionsEditor name={`correct-${index}`} options={q.options} correct={q.correct}
+        onText={(o, value) => setQuestion(index, { options: q.options.map((x, j) => (j === o ? value : x)) })}
+        onCorrect={(c) => setQuestion(index, { correct: c })}
+        onAdd={() => setQuestion(index, { options: [...q.options, ''] })}
+        onRemove={(o) => removeOption(index, o)}/>
+      <label>Retroalimentación al responder<input value={q.feedback} maxLength={300} onChange={(e) => setQuestion(index, { feedback: e.target.value })}/></label>
+      {form.capacity_questions.length > 1 && <button type="button" className="text-button danger-text" onClick={() => set('capacity_questions', form.capacity_questions.filter((_, i) => i !== index))}>Quitar pregunta</button>}
+    </fieldset>)}
+    {form.capacity_questions.length < 5 && <button type="button" className="btn btn-secondary" onClick={() => set('capacity_questions', [...form.capacity_questions, blankQuestion()])}>Agregar pregunta</button>}
+    <label>Pregunta de oportunidad<input value={form.opportunity_question} maxLength={300} required onChange={(e) => set('opportunity_question', e.target.value)}/></label>
+    <label>Pregunta de motivación<input value={form.motivation_question} maxLength={300} required onChange={(e) => set('motivation_question', e.target.value)}/></label>
+    <label>Acción real que debe practicar<textarea rows={2} maxLength={500} required value={form.real_action} onChange={(e) => set('real_action', e.target.value)}/></label>
+    {error && <div className="form-error" role="alert">{error}</div>}
+    <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar módulo'}</button></div>
+  </form>;
+}
+
+function ChallengeEditor({ initial, topics, onDone, onClose }) {
+  const [form, setForm] = useState(() => initial || { title: '', topic: topics[0] || '', scenario: '', options: ['', ''], correct_index: 0, feedback: '', status: 'draft' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const topicOptions = form.topic && !topics.includes(form.topic) ? [form.topic, ...topics] : topics;
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  function removeOption(oIndex) {
+    setForm((prev) => ({ ...prev, options: prev.options.filter((_, j) => j !== oIndex),
+      correct_index: prev.correct_index === oIndex ? 0 : prev.correct_index > oIndex ? prev.correct_index - 1 : prev.correct_index }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setError('');
+    const payload = { title: form.title.trim(), topic: form.topic, scenario: form.scenario.trim(), options: form.options.map((o) => o.trim()),
+      correct_index: form.correct_index, feedback: form.feedback.trim(), status: form.status };
+    try {
+      if (initial) await api.manager.updateChallenge(initial.id, payload);
+      else await api.manager.createChallenge(payload);
+      onDone();
+    } catch (err) { setError(err.message || 'No se pudo guardar el reto.'); }
+    finally { setBusy(false); }
+  }
+
+  return <form className="modal-form manager-editor" onSubmit={submit}>
+    <label>Título<input value={form.title} maxLength={180} required onChange={(e) => set('title', e.target.value)}/></label>
+    <div className="form-grid">
+      <label>Tema<select value={form.topic} onChange={(e) => set('topic', e.target.value)}>{topicOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
+      <label>Estado<select value={form.status} onChange={(e) => set('status', e.target.value)}>{STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+    </div>
+    <label>Escenario<textarea rows={3} maxLength={1000} required value={form.scenario} onChange={(e) => set('scenario', e.target.value)}/></label>
+    <h3 className="editor-heading">Opciones de respuesta</h3>
+    <OptionsEditor name="correct-challenge" options={form.options} correct={form.correct_index}
+      onText={(o, value) => set('options', form.options.map((x, j) => (j === o ? value : x)))}
+      onCorrect={(c) => set('correct_index', c)}
+      onAdd={() => set('options', [...form.options, ''])}
+      onRemove={removeOption}/>
+    <label>Retroalimentación al responder<textarea rows={2} maxLength={300} value={form.feedback} onChange={(e) => set('feedback', e.target.value)}/></label>
+    {error && <div className="form-error" role="alert">{error}</div>}
+    <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar reto'}</button></div>
+  </form>;
+}
+
+function ManagerEditorModal({ kind, id, topics, onClose, onSaved }) {
+  const [initial, setInitial] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    if (!id) return undefined;
+    let active = true;
+    const request = kind === 'module' ? api.manager.getModule(id) : api.manager.getChallenge(id);
+    request.then((item) => { if (active) setInitial(item); }).catch((err) => { if (active) setLoadError(err.message || 'No se pudo abrir el contenido.'); });
+    return () => { active = false; };
+  }, [kind, id]);
+  const title = `${id ? 'Editar' : 'Nuevo'} ${kind === 'module' ? 'módulo' : 'reto'}`;
+  const done = () => { onSaved(); onClose(); };
+  let body;
+  if (loadError) body = <p className="form-error" role="alert">{loadError}</p>;
+  else if (id && !initial) body = <p className="muted-text">Cargando…</p>;
+  else if (kind === 'module') body = <ModuleEditor initial={initial} topics={topics} onDone={done} onClose={onClose}/>;
+  else body = <ChallengeEditor initial={initial} topics={topics} onDone={done} onClose={onClose}/>;
+  return <Modal title={title} onClose={onClose}>{body}</Modal>;
+}
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('Error al mostrar la sección', error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return <div className="fatal-state inside"><h2>No pudimos mostrar esta sección</h2><p>Recarga la página. Si vuelve a pasar, avisa al administrador.</p><button className="btn btn-secondary" onClick={() => window.location.reload()}>Recargar</button></div>;
+    }
+    return this.props.children;
+  }
 }
 
 function AdminCreateUserModal({ onClose, onCreated, areas = [] }) {
@@ -645,14 +989,14 @@ function AdminCreateUserModal({ onClose, onCreated, areas = [] }) {
   async function submit(e) {
     e.preventDefault(); setBusy(true); setError('');
     try {
-      const { temporary_password, totp_setup_secret, ...user } = await api.admin.createUser({ ...form, name: form.name.trim(), email: form.email.trim(), area: form.area.trim() });
+      const { temporary_password, ...user } = await api.admin.createUser({ ...form, name: form.name.trim(), email: form.email.trim(), area: form.area.trim() });
       await onCreated(user);
-      setCreated({ email: user.email, temporary_password, totp_setup_secret });
+      setCreated({ email: user.email, temporary_password });
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-  if (created) return <Modal title="Usuario creado" onClose={onClose}><div className="created-user-credentials"><p>Guarda estos datos ahora y entrégalos al usuario por un canal seguro. Se muestran una sola vez.</p><div><strong>Correo</strong><code>{created.email}</code></div><div><strong>Contraseña inicial</strong><code>{created.temporary_password}</code></div>{created.totp_setup_secret && <div><strong>Secreto para configurar 2FA</strong><code>{created.totp_setup_secret}</code><small>El usuario debe agregar este secreto a su aplicación de autenticación antes de iniciar sesión.</small></div>}<div className="modal-actions"><button type="button" className="btn btn-primary" onClick={onClose}>Ya guardé los datos</button></div></div></Modal>;
-  return <Modal title="Crear usuario" onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nombre completo<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={120}/></label><label>Correo corporativo<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required/></label><div className="form-grid"><label>Área<select value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} required><option value="" disabled>Selecciona un área</option>{areas.map((area) => <option key={area.id || area.name} value={area.name}>{area.name}</option>)}</select></label><label>Rol<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="worker">Trabajador</option><option value="manager">Gestor</option><option value="admin">Administrador</option></select></label></div><p className="form-note">Las áreas se crean en «Áreas y roles». Los roles Gestor y Administrador requieren configurar 2FA.</p>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || !form.area}>{busy ? 'Creando…' : 'Crear usuario'}</button></div></form></Modal>;
+  if (created) return <Modal title="Usuario creado" onClose={onClose}><div className="created-user-credentials"><p>Guarda estos datos ahora y entrégalos al usuario por un canal seguro. Se muestran una sola vez.</p><div><strong>Correo</strong><code>{created.email}</code></div><div><strong>Contraseña inicial</strong><code>{created.temporary_password}</code></div><p className="form-note">Gestores y administradores recibirán un código en su correo cada vez que inicien sesión.</p><div className="modal-actions"><button type="button" className="btn btn-primary" onClick={onClose}>Ya guardé los datos</button></div></div></Modal>;
+  return <Modal title="Crear usuario" onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Nombre completo<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={120}/></label><label>Correo corporativo<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required/></label><div className="form-grid"><label>Área<select value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} required><option value="" disabled>Selecciona un área</option>{areas.map((area) => <option key={area.id || area.name} value={area.name}>{area.name}</option>)}</select></label><label>Rol<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="worker">Trabajador</option><option value="manager">Gestor</option><option value="admin">Administrador</option></select></label></div><p className="form-note">Las áreas se crean en «Áreas y roles». Gestores y administradores iniciarán sesión con un código que llega a su correo.</p>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || !form.area}>{busy ? 'Creando…' : 'Crear usuario'}</button></div></form></Modal>;
 }
 
 function AdminCreateAreaModal({ onClose, onCreated }) {
@@ -674,14 +1018,13 @@ function AdminEditUserModal({ user, currentUserId, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isSelf = Number(user.id) === Number(currentUserId);
-  const canPromote = user.twoFactor || roleValue(user.role) !== 'worker';
   async function submit(e) {
     e.preventDefault(); setBusy(true); setError('');
     try { await api.admin.updateUser(user.id, { role, is_active: active }); await onSaved(); onClose(); }
     catch (err) { setError(err.message || 'No se pudo guardar el usuario.'); }
     finally { setBusy(false); }
   }
-  return <Modal title={`Editar acceso de ${user.name}`} onClose={onClose}><form className="modal-form" onSubmit={submit}><p className="admin-hint">Nombre: {user.name}<br/>Correo: {user.email}<br/>Área: {user.area}</p><label>Rol<select value={role} onChange={(e) => setRole(e.target.value)} disabled={isSelf}><option value="worker">Trabajador</option><option value="manager" disabled={!canPromote}>Gestor</option><option value="admin" disabled={!canPromote}>Administrador</option></select></label>{!canPromote && <p className="admin-hint">Para asignar un rol con 2FA a esta cuenta, la API necesita ofrecer un proceso de configuración del autenticador. Por ahora, crea una cuenta nueva con ese rol.</p>}<label className="admin-checkbox"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} disabled={isSelf}/>Cuenta activa</label>{isSelf && <p className="admin-hint">No puedes cambiar tu propio rol ni desactivar tu cuenta desde este panel.</p>}<p className="admin-hint">La API todavía no permite modificar nombre, correo o área.</p>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || (role === roleValue(user.role) && active === (user.status === 'Activo'))}>{busy ? 'Guardando…' : 'Guardar cambios'}</button></div></form></Modal>;
+  return <Modal title={`Editar acceso de ${user.name}`} onClose={onClose}><form className="modal-form" onSubmit={submit}><p className="admin-hint">Nombre: {user.name}<br/>Correo: {user.email}<br/>Área: {user.area}</p><label>Rol<select value={role} onChange={(e) => setRole(e.target.value)} disabled={isSelf}><option value="worker">Trabajador</option><option value="manager">Gestor</option><option value="admin">Administrador</option></select></label><label className="admin-checkbox"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} disabled={isSelf}/>Cuenta activa</label>{isSelf && <p className="admin-hint">No puedes cambiar tu propio rol ni desactivar tu cuenta desde este panel.</p>}<p className="admin-hint">La API todavía no permite modificar nombre, correo o área.</p>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button className="btn btn-primary" disabled={busy || (role === roleValue(user.role) && active === (user.status === 'Activo'))}>{busy ? 'Guardando…' : 'Guardar cambios'}</button></div></form></Modal>;
 }
 
 function AdminDeleteUserModal({ user, onClose, onDeleted }) {
@@ -707,7 +1050,10 @@ function AuthenticatedApp() {
   const [reloadKey, setReloadKey] = useState(0);
   const [auditPage, setAuditPage] = useState(0);
   const [auditQuery, setAuditQuery] = useState('');
-  const activeView = user?.role === 'admin' ? view : 'inicio';
+  const [managerEditor, setManagerEditor] = useState(null);
+  const managerView = MANAGER_VIEWS.includes(view) ? view : 'inicio';
+  const activeView = user?.role === 'admin' ? view : user?.role === 'manager' ? managerView : 'inicio';
+  const navView = user?.role === 'worker' ? view : activeView;
 
   useEffect(() => {
     const onPopState = () => { setView(adminViewFromPath(window.location.pathname)); setError(''); setNotice(null); };
@@ -732,7 +1078,8 @@ function AuthenticatedApp() {
     if (!user) return;
     let active = true;
     async function load() {
-      if (user.role !== 'admin') return user.role === 'manager' ? api.manager.dashboard() : api.worker.dashboard();
+      if (user.role === 'manager') return loadManagerPanel(activeView);
+      if (user.role !== 'admin') return api.worker.dashboard();
       if (activeView === 'inicio') return api.admin.dashboard();
       if (activeView === 'usuarios' || activeView === 'areas') {
         const [users, areas] = await Promise.all([api.admin.users(), api.admin.areas()]);
@@ -776,9 +1123,9 @@ function AuthenticatedApp() {
     } catch (err) { setNotice({ type: 'error', message: err.message || 'No se pudo exportar el CSV.' }); }
   }
 
-  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={view} onCreate={() => setModal('content')}/> : <WorkerViews data={data} view={view} setView={navigate}/>;
+  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)}/>;
 
-  return <InkaSecLayout activeView={view} onViewChange={navigate} notifications={data?.notifications || []}><div className="inka-page-shell">{content}</div>{modal === 'content' && <ManagerCreateModal onClose={() => setModal(null)} onCreated={(item) => setData((prev) => ({ ...prev, content: [item, ...prev.content] }))}/>} {modal === 'user' && <AdminCreateUserModal onClose={() => setModal(null)} areas={data?.areas || []} onCreated={() => refreshAdmin('Usuario creado correctamente.')}/>} {modal === 'area' && <AdminCreateAreaModal onClose={() => setModal(null)} onCreated={() => refreshAdmin('Área creada correctamente.')}/>} {modal?.type === 'edit' && <AdminEditUserModal user={modal.user} currentUserId={user.id} onClose={() => setModal(null)} onSaved={() => refreshAdmin('Acceso actualizado correctamente.')}/>} {modal?.type === 'delete' && <AdminDeleteUserModal user={modal.user} onClose={() => setModal(null)} onDeleted={() => refreshAdmin('Usuario eliminado correctamente.')}/>}</InkaSecLayout>;
+  return <InkaSecLayout activeView={navView} onViewChange={navigate} notifications={data?.notifications || []}><div className="inka-page-shell"><ErrorBoundary key={activeView}>{content}</ErrorBoundary></div>{managerEditor && <ManagerEditorModal kind={managerEditor.kind} id={managerEditor.id} topics={data?.topics || []} onClose={() => setManagerEditor(null)} onSaved={() => setReloadKey((value) => value + 1)}/>} {modal === 'user' && <AdminCreateUserModal onClose={() => setModal(null)} areas={data?.areas || []} onCreated={() => refreshAdmin('Usuario creado correctamente.')}/>} {modal === 'area' && <AdminCreateAreaModal onClose={() => setModal(null)} onCreated={() => refreshAdmin('Área creada correctamente.')}/>} {modal?.type === 'edit' && <AdminEditUserModal user={modal.user} currentUserId={user.id} onClose={() => setModal(null)} onSaved={() => refreshAdmin('Acceso actualizado correctamente.')}/>} {modal?.type === 'delete' && <AdminDeleteUserModal user={modal.user} onClose={() => setModal(null)} onDeleted={() => refreshAdmin('Usuario eliminado correctamente.')}/>}</InkaSecLayout>;
 }
 
 export default function App() { return <AuthProvider><AuthenticatedApp/></AuthProvider>; }

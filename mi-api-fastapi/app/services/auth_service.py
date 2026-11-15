@@ -6,8 +6,9 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.models import User, AuthChallenge
-from app.core.security import hash_password, verify_password, create_access_token, verify_totp
+from app.core.security import hash_password, verify_password, create_access_token, new_email_code, hash_email_code, verify_email_code
 from app.services.audit_service import record_audit
+from app.services.email_service import EmailDeliveryError, mask_email, send_login_code
 from app.repositories.user_repository import get_by_email, normalize_email
 
 LOCK_MINUTES = 15
@@ -61,9 +62,18 @@ def login(db: Session, *, email: str, password: str, ip: str | None, user_agent:
     if user.role in ROLES_WITH_2FA:
         # El contador de fallos no se limpia aquí, sino al superar el 2FA. Si no, volver
         # a iniciar sesión daría intentos ilimitados para adivinar el código.
-        challenge = AuthChallenge(challenge_id=uuid4().hex, user_id=user.id, expires_at=now + timedelta(minutes=CHALLENGE_MINUTES))
-        db.add(challenge); db.commit()
-        return {"requires_2fa": True, "challenge_id": challenge.challenge_id, "email": user.email}, None
+        challenge_id = uuid4().hex
+        code = new_email_code()
+        db.add(AuthChallenge(challenge_id=challenge_id, user_id=user.id, expires_at=now + timedelta(minutes=CHALLENGE_MINUTES),
+                             code_hash=hash_email_code(challenge_id, code)))
+        try:
+            send_login_code(user.email, code)
+        except EmailDeliveryError:
+            # Sin correo no hay segundo factor: no se deja un desafío que nadie puede usar.
+            db.rollback()
+            raise HTTPException(status_code=503, detail="No pudimos enviar el código a tu correo. Intenta de nuevo en unos minutos.")
+        db.commit()
+        return {"requires_2fa": True, "challenge_id": challenge_id, "email_hint": mask_email(user.email)}, None
     _clear_failures(user)
     db.commit()
     token = create_access_token(user_id=user.id, role=user.role, company_id=user.company_id)
@@ -89,7 +99,7 @@ def verify_second_factor(db: Session, *, challenge_id: str, code: str, ip: str |
     if _is_locked(user, now):
         _burn(db, challenge, now)
         raise HTTPException(status_code=423, detail="Cuenta bloqueada temporalmente")
-    if not user.totp_secret or not verify_totp(user.totp_secret, code):
+    if not verify_email_code(challenge.challenge_id, code, challenge.code_hash):
         _register_failure(db, user, now)
         if _is_locked(user, now):
             _burn(db, challenge, now)

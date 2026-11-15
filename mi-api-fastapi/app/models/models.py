@@ -33,7 +33,6 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     area: Mapped[Area | None] = relationship()
 
@@ -43,6 +42,7 @@ class AuthChallenge(Base):
     challenge_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # HMAC del código de 6 dígitos enviado por correo
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class LearningModule(Base):
@@ -63,10 +63,14 @@ class LearningModule(Base):
 class Assignment(Base):
     __tablename__ = "assignments"
     id: Mapped[int] = mapped_column(primary_key=True)
-    module_id: Mapped[int] = mapped_column(ForeignKey("learning_modules.id", ondelete="CASCADE"), index=True)
+    # Exactamente uno de los dos: un módulo o un reto (HU-09).
+    module_id: Mapped[int | None] = mapped_column(ForeignKey("learning_modules.id", ondelete="CASCADE"), nullable=True, index=True)
+    challenge_id: Mapped[int | None] = mapped_column(ForeignKey("challenges.id", ondelete="CASCADE"), nullable=True, index=True)
+    # Sin user_id ni area_id = toda la empresa.
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=True, index=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 class ModuleProgress(Base):
@@ -89,6 +93,17 @@ class CombResponse(Base):
     prompt_code: Mapped[str] = mapped_column(String(30))
     value: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class Reflection(Base):
+    """Respuesta escrita por el trabajador en un módulo (oportunidad, motivación). Una por pregunta."""
+    __tablename__ = "reflections"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    module_id: Mapped[int] = mapped_column(ForeignKey("learning_modules.id", ondelete="CASCADE"), index=True)
+    prompt_code: Mapped[str] = mapped_column(String(30))
+    text: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "module_id", "prompt_code", name="uq_reflection_user_module_prompt"),)
 
 class Notification(Base):
     __tablename__ = "notifications"

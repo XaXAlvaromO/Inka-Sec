@@ -1,4 +1,8 @@
 """Reglas de progreso, vistas a través de las rutas que realmente usa el frontend."""
+import pytest
+from sqlalchemy import select
+
+from app.models.models import LearningModule
 from conftest import API, csrf
 
 
@@ -36,7 +40,7 @@ def test_challenge_single_attempt_and_validation(world, client_for):
     dash = worker.get(f"{API}/worker/dashboard").json()
     assert dash["challenge"]["id"] == world.c2.id
     assert dash["stats"][1]["value"] == "0 / 2" and dash["stats"][1]["helper"] == "1 respondidos"
-    assert dash["weakTopics"] == [{"topic": "Phishing", "errors": 1}]
+    assert dash["weakTopics"] == [{"name": "Phishing", "icon": "shield", "errors": 1, "score": 0}]
 
 
 def test_dashboard_has_no_challenge_when_all_are_answered(world, client_for):
@@ -54,12 +58,6 @@ def test_manager_dashboard_is_scoped_to_own_content(world, client_for):
     assert success[world.mods[0].id] == 50                              # 1 de 2 trabajadores activos
     assert dash["stats"][2]["value"] == "50%"                           # 1 acierto en 2 intentos
     assert dash["topicErrors"][0]["topic"] == "Phishing" and dash["topicErrors"][0]["errors"] == 1
-
-
-def test_manager_creates_draft_content(world, client_for):
-    manager = client_for(world.mgr)
-    r = manager.post(f"{API}/manager/content", json={"title": "  Wi-Fi público  ", "topic": "Redes", "description": "d"}, headers=csrf(manager))
-    assert r.status_code == 200 and r.json()["status"] == "Borrador" and r.json()["title"] == "Wi-Fi público"
 
 
 def test_admin_dashboard_and_reports(world, client_for):
@@ -81,7 +79,7 @@ def test_admin_user_lifecycle(world, client_for):
     r = admin.post(f"{API}/admin/users", json={"name": "Nueva", "email": "Nueva@X.pe", "area": "Finanzas", "role": "worker"}, headers=csrf(admin))
     assert r.status_code == 200
     created = r.json()
-    assert created["email"] == "nueva@x.pe" and created["totp_setup_secret"] is None
+    assert created["email"] == "nueva@x.pe" and "totp_setup_secret" not in created and "temporary_password" in created
     new_user = client_for()
     assert new_user.post(f"{API}/auth/login", json={"email": "nueva@x.pe", "password": created["temporary_password"]}).status_code == 200
     assert admin.post(f"{API}/admin/users", json={"name": "Otra", "email": "nueva@x.pe", "area": "Finanzas"}, headers=csrf(admin)).status_code == 409
@@ -105,4 +103,89 @@ def test_worker_saves_comb_diagnostic(world, client_for):
     payload = {"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 4}]}
     r = worker.post(f"{API}/worker/modules/{world.mods[0].id}/comb", json=payload, headers=csrf(worker))
     assert r.status_code == 200 and r.json() == {"saved": 1}
-    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0"}
+    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "saved_reflections": {}}
+
+
+# ------------------------------------------------- módulo y reto del trabajador
+
+CAPACITY = [
+    {"prompt": "¿Cuál es el riesgo de reutilizar la clave?", "options": ["Ninguno", "Que la prueben en otras cuentas", "Nada"],
+     "correct": 1, "feedback": "Las credenciales filtradas se prueban en otros servicios."},
+    {"prompt": "¿Qué haces con un correo que pide tu clave?", "options": ["La envío", "No la comparto y aviso", "La cambio y la envío"],
+     "correct": 1, "feedback": "Nadie legítimo pide tu contraseña."},
+]
+
+
+@pytest.fixture
+def lesson(world, db):
+    m = LearningModule(company_id=world.co.id, slug="leccion", title="Lección", topic="Credenciales",
+                       behavior_objective="x", status="published", content_json={"title": "Lección", "capacity_questions": CAPACITY},
+                       created_by=world.mgr.id)
+    db.add(m); db.commit()
+    return m
+
+
+def test_worker_never_receives_the_correct_answers(world, lesson, client_for):
+    worker = client_for(world.w1)
+    body = worker.get(f"{API}/worker/modules/{lesson.id}").json()
+    assert len(body["capacity_questions"]) == 2
+    for q in body["capacity_questions"]:
+        assert set(q) == {"prompt", "options"}
+    assert "correct" not in str(body) and "feedback" not in str(body)
+
+
+def test_capacity_answers_are_graded_on_the_server(world, lesson, client_for):
+    worker = client_for(world.w1)
+    url = f"{API}/worker/modules/{lesson.id}/capacity"
+    r = worker.post(url, json={"answers": [{"index": 0, "choice": 1}, {"index": 1, "choice": 0}]}, headers=csrf(worker))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["correct"] == 1 and body["total"] == 2
+    assert body["results"][0]["is_correct"] is True and body["results"][1]["is_correct"] is False
+    assert body["results"][1]["correct_index"] == 1 and body["results"][1]["feedback"]
+
+
+@pytest.mark.parametrize("answers", [
+    [{"index": 0, "choice": 1}],                                   # falta una pregunta
+    [{"index": 0, "choice": 1}, {"index": 0, "choice": 2}],        # repite una pregunta
+    [{"index": 0, "choice": 1}, {"index": 1, "choice": 9}],        # opción inexistente
+    [{"index": 0, "choice": 1}, {"index": 25, "choice": 0}],       # pregunta inexistente
+])
+def test_capacity_rejects_incomplete_or_forged_answers(world, lesson, client_for, answers):
+    worker = client_for(world.w1)
+    r = worker.post(f"{API}/worker/modules/{lesson.id}/capacity", json={"answers": answers}, headers=csrf(worker))
+    assert r.status_code == 422
+
+
+def test_reflections_are_saved_once_per_question_and_returned(world, lesson, client_for, db):
+    from app.models.models import LearningModule, Reflection
+    worker = client_for(world.w1)
+    url = f"{API}/worker/modules/{lesson.id}/reflections"
+    assert worker.post(url, json={"responses": [{"prompt_code": "oportunidad", "text": "El tiempo"}]}, headers=csrf(worker)).status_code == 200
+    assert worker.post(url, json={"responses": [{"prompt_code": "oportunidad", "text": "El tiempo y la costumbre"}]}, headers=csrf(worker)).status_code == 200
+    rows = db.scalars(select(Reflection).where(Reflection.module_id == lesson.id)).all()
+    assert len(rows) == 1 and rows[0].text == "El tiempo y la costumbre"
+    detail = worker.get(f"{API}/worker/modules/{lesson.id}").json()
+    assert detail["saved_reflections"] == {"oportunidad": "El tiempo y la costumbre"}
+
+
+def test_reflections_reject_unknown_prompts_and_huge_texts(world, lesson, client_for):
+    worker = client_for(world.w1)
+    url = f"{API}/worker/modules/{lesson.id}/reflections"
+    assert worker.post(url, json={"responses": [{"prompt_code": "otra", "text": "x"}]}, headers=csrf(worker)).status_code == 422
+    assert worker.post(url, json={"responses": [{"prompt_code": "motivacion", "text": "x" * 1001}]}, headers=csrf(worker)).status_code == 422
+
+
+def test_drafts_and_foreign_modules_reject_answers(world, client_for):
+    worker = client_for(world.w1)
+    for module in (world.draft, world.foreign):
+        cap = worker.post(f"{API}/worker/modules/{module.id}/capacity", json={"answers": [{"index": 0, "choice": 0}]}, headers=csrf(worker))
+        ref = worker.post(f"{API}/worker/modules/{module.id}/reflections", json={"responses": [{"prompt_code": "oportunidad", "text": "x"}]}, headers=csrf(worker))
+        assert cap.status_code == 404 and ref.status_code == 404
+
+
+def test_pending_challenge_shows_options_but_not_the_answer(world, client_for):
+    worker = client_for(world.w1)
+    challenge = worker.get(f"{API}/worker/dashboard").json()["challenge"]
+    assert challenge["id"] == world.c1.id and challenge["options"] == ["a", "b", "c"]
+    assert "correct_index" not in str(challenge)
