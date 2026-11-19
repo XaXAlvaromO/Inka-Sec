@@ -83,12 +83,21 @@ jobs:
 
     steps:
       # Los secretos van por variables de entorno, no interpolados dentro del script.
-      - name: Deploy a Dev en Render
+      - name: Desplegar backend y frontend de desarrollo en Render
         env:
-          RENDER_HOOK: ${{ secrets.RENDER_DEV_HOOK }}
+          BACKEND_HOOK: ${{ secrets.RENDER_DEV_BACKEND_HOOK }}
+          FRONTEND_HOOK: ${{ secrets.RENDER_DEV_FRONTEND_HOOK }}
         run: |
-          curl -fsS -X POST "$RENDER_HOOK" > /dev/null
-          echo "Deploy a Dev disparado"
+          : "${BACKEND_HOOK:?Falta el secreto RENDER_DEV_BACKEND_HOOK}"
+          : "${FRONTEND_HOOK:?Falta el secreto RENDER_DEV_FRONTEND_HOOK}"
+          curl --fail --silent --max-time 30 --output /dev/null --request POST -- "$BACKEND_HOOK" || {
+            echo "::error::Render no aceptó el deploy del backend de desarrollo"
+            exit 1
+          }
+          curl --fail --silent --max-time 30 --output /dev/null --request POST -- "$FRONTEND_HOOK" || {
+            echo "::error::Render no aceptó el deploy del frontend de desarrollo"
+            exit 1
+          }
 
 
   smoke-test:
@@ -97,24 +106,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Verificar que Dev responde
+      - name: Verificar la API a través del frontend de desarrollo
         env:
-          DEV_URL: ${{ vars.RENDER_DEV_URL }}
+          DEV_FRONTEND_URL: ${{ vars.RENDER_DEV_FRONTEND_URL }}
         run: |
+          : "${DEV_FRONTEND_URL:?Falta la variable RENDER_DEV_FRONTEND_URL}"
           for i in {1..20}; do
-            STATUS=$(curl -sS -o /dev/null -w "%{http_code}" \
-              "$DEV_URL/api/v1/health" || true)
-
-            if [ "$STATUS" = "200" ]; then
-              echo "Dev responde correctamente (HTTP $STATUS)"
+            if curl --fail --silent --max-time 15 -- "${DEV_FRONTEND_URL%/}/api/v1/health" \
+              | jq -e '.status == "healthy" and .database == "connected"' > /dev/null; then
+              echo "El frontend de desarrollo llega a la API y a la base de datos"
               exit 0
             fi
-
-            echo "Intento $i fallido (HTTP $STATUS), reintentando..."
+            echo "Intento $i: la ruta de salud aún no devuelve el JSON esperado"
             sleep 15
           done
-
-          echo "Dev no responde correctamente"
+          echo "::error::La ruta de salud de desarrollo no devolvió el JSON esperado"
           exit 1
 
 
@@ -125,9 +131,18 @@ jobs:
     if: vars.RENDER_PROD_ENABLED == 'true'
 
     steps:
-      - name: Deploy a Prod en Render
+      - name: Desplegar backend y frontend de producción en Render
         env:
-          RENDER_HOOK: ${{ secrets.RENDER_PROD_HOOK }}
+          BACKEND_HOOK: ${{ secrets.RENDER_PROD_BACKEND_HOOK }}
+          FRONTEND_HOOK: ${{ secrets.RENDER_PROD_FRONTEND_HOOK }}
         run: |
-          curl -fsS -X POST "$RENDER_HOOK" > /dev/null
-          echo "Deploy a Producción disparado"
+          : "${BACKEND_HOOK:?Falta el secreto RENDER_PROD_BACKEND_HOOK}"
+          : "${FRONTEND_HOOK:?Falta el secreto RENDER_PROD_FRONTEND_HOOK}"
+          curl --fail --silent --max-time 30 --output /dev/null --request POST -- "$BACKEND_HOOK" || {
+            echo "::error::Render no aceptó el deploy del backend de producción"
+            exit 1
+          }
+          curl --fail --silent --max-time 30 --output /dev/null --request POST -- "$FRONTEND_HOOK" || {
+            echo "::error::Render no aceptó el deploy del frontend de producción"
+            exit 1
+          }
