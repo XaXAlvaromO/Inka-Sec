@@ -21,6 +21,9 @@ export function AuthProvider({ children }) {
     loading,
     async login(credentials) {
       const result = await api.auth.login(credentials);
+      if (!result?.user && !result?.requires_2fa) {
+        throw new Error('La API no devolvió una sesión válida. Verifica la conexión del frontend con el backend.');
+      }
       if (result?.user) setUser(result.user);
       return result;
     },
