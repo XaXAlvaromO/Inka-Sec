@@ -214,15 +214,40 @@ def test_stats_show_each_worker_for_own_content_only(world, client_for):
 
     assert world.foreign.id not in {m["id"] for m in stats["modules"]}
     challenge = next(c for c in stats["challenges"] if c["id"] == world.c1.id)
-    assert challenge["attempts"] == 1 and challenge["correct"] == 1 and challenge["success_rate"] == 100
+    # El reto entrena, no sanciona: se ve quién practicó, nunca si acertó.
+    assert challenge["attempts"] == 1 and challenge["correct"] is None and challenge["success_rate"] is None
+    practiced = {row["user_id"]: row for row in challenge["workers"]}
+    assert practiced[world.w1.id]["answered"] is True and practiced[world.w1.id]["tries"] == 1
+    assert all("correct" not in row for row in challenge["workers"])
 
 
-def test_dashboard_topic_errors_expose_the_rate_for_the_front(world, client_for):
+def _extra_workers(db, world, n, password_hash):
+    people = [User(company_id=world.co.id, area_id=world.area.id, name=f"extra{i}", email=f"extra{i}@x.pe",
+                   password_hash=password_hash, role="worker") for i in range(n)]
+    db.add_all(people); db.commit()
+    return people
+
+
+def test_dashboard_topic_errors_expose_the_rate_for_the_front(world, client_for, db, password_hash):
     worker = client_for(world.w1)
     worker.post(f"{API}/worker/challenges/{world.c2.id}/answer", json={"choice": 0}, headers=csrf(worker))
+    # Con una sola persona, el "promedio" del tema sería su resultado: no se muestra.
+    assert client_for(world.mgr).get(f"{API}/manager/dashboard").json()["topicErrors"] == []
+    for person in [world.w2, *_extra_workers(db, world, 1, password_hash)]:
+        c = client_for(person)
+        c.post(f"{API}/worker/challenges/{world.c2.id}/answer", json={"choice": 0}, headers=csrf(c))
     dash = client_for(world.mgr).get(f"{API}/manager/dashboard").json()
     top = dash["topicErrors"][0]
-    assert top["topic"] == "Phishing" and top["errorRate"] == 100 and top["error_rate"] == 100
+    assert top["topic"] == "Phishing" and top["errorRate"] == 100 and top["error_rate"] == 100 and top["people"] == 3
+
+
+def test_success_rate_appears_only_with_three_or_more_people(world, client_for, db, password_hash):
+    people = [world.w1, world.w2, *_extra_workers(db, world, 1, password_hash)]
+    for person, choice in zip(people, [1, 1, 0]):
+        c = client_for(person)
+        c.post(f"{API}/worker/challenges/{world.c1.id}/answer", json={"choice": choice}, headers=csrf(c))
+    challenge = next(c for c in client_for(world.mgr).get(f"{API}/manager/stats").json()["challenges"] if c["id"] == world.c1.id)
+    assert challenge["attempts"] == 3 and challenge["correct"] == 2 and challenge["success_rate"] == 67
 
 
 def test_manager_dashboard_lists_modules_and_challenges_apart(world, client_for):
@@ -237,10 +262,10 @@ def test_manager_dashboard_lists_modules_and_challenges_apart(world, client_for)
 
 # ---------------------------------------------------------------- retos del trabajador
 
-def test_demo_seed_creates_two_published_challenges_once(world, client_for, db):
+def test_demo_seed_creates_published_challenges_once(world, client_for, db):
     from app.demo_challenges import DEMO_CHALLENGES, ensure_demo_challenges
-    assert len(DEMO_CHALLENGES) == 2
-    assert ensure_demo_challenges(db, world.co, world.mgr) == 2
+    assert {d.get("kind", "quick") for d in DEMO_CHALLENGES} == {"quick", "steps", "signals"}
+    assert ensure_demo_challenges(db, world.co, world.mgr) == len(DEMO_CHALLENGES)
     assert ensure_demo_challenges(db, world.co, world.mgr) == 0          # no duplica al repetir
     titles = {c["title"] for c in client_for(world.w1).get(f"{API}/worker/dashboard").json()["challenges"]}
     assert {d["title"] for d in DEMO_CHALLENGES} <= titles

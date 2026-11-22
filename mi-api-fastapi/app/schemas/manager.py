@@ -38,20 +38,73 @@ class ModuleIn(BaseModel):
     status: Literal["draft", "published", "archived"] = "draft"
 
 
+class StepOptionIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    text: str = Field(min_length=1, max_length=200)
+    feedback: str = Field(min_length=5, max_length=300, description="Qué pasa si eliges esta opción")
+    safe: bool = False
+
+
+class StepIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    prompt: str = Field(min_length=5, max_length=400)
+    options: list[StepOptionIn] = Field(min_length=2, max_length=4)
+
+    @model_validator(mode="after")
+    def _one_safe(self):
+        if sum(o.safe for o in self.options) != 1:
+            raise ValueError("Cada paso debe tener exactamente una opción segura")
+        return self
+
+
+class SegmentIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    field: Literal["from", "subject", "body", "link", "attachment"]
+    text: str = Field(min_length=1, max_length=300)
+    suspicious: bool = False
+    explanation: str = Field(min_length=5, max_length=300, description="Por qué es (o no es) una señal")
+
+
 class ChallengeIn(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=3, max_length=180)
     topic: str = Field(min_length=1, max_length=100)
+    kind: Literal["quick", "steps", "signals"] = "quick"
     scenario: str = Field(min_length=20, max_length=1000)
-    options: list[str] = Field(min_length=2, max_length=4)
-    correct_index: int = Field(ge=0, le=3)
+    options: list[str] = Field(default_factory=list, max_length=4)
+    correct_index: int = Field(default=0, ge=0, le=3)
+    steps: list[StepIn] = Field(default_factory=list, max_length=5)
+    segments: list[SegmentIn] = Field(default_factory=list, max_length=12)
     feedback: str = Field(default="", max_length=300)
     status: Literal["draft", "published", "archived"] = "draft"
 
     @model_validator(mode="after")
     def _valid(self):
-        _check_options(self.options, self.correct_index)
+        if self.kind == "quick":
+            if len(self.options) < 2:
+                raise ValueError("Agrega al menos 2 opciones")
+            _check_options(self.options, self.correct_index)
+        elif self.kind == "steps":
+            if len(self.steps) < 2:
+                raise ValueError("El escenario por pasos necesita al menos 2 pasos")
+        else:
+            if len(self.segments) < 3:
+                raise ValueError("Divide el mensaje en al menos 3 fragmentos")
+            fields = [s.field for s in self.segments]
+            if fields.count("from") != 1 or fields.count("subject") != 1:
+                raise ValueError("El mensaje debe tener un remitente y un asunto")
+            if not any(s.suspicious for s in self.segments):
+                raise ValueError("Marca al menos un fragmento como sospechoso")
+            if all(s.suspicious for s in self.segments):
+                raise ValueError("Deja al menos un fragmento normal, para que haya algo que distinguir")
         return self
+
+    def content(self) -> dict | None:
+        if self.kind == "steps":
+            return {"steps": [s.model_dump() for s in self.steps]}
+        if self.kind == "signals":
+            return {"segments": [s.model_dump() for s in self.segments]}
+        return None
 
 
 class AssignmentIn(BaseModel):

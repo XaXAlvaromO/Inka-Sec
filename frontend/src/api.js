@@ -69,6 +69,22 @@ export const api = {
     saveReflections: (id, payload) => request(`/worker/modules/${id}/reflections`, { method: 'POST', body: payload }),
     completeModule: (id) => request(`/worker/modules/${id}/complete`, { method: 'POST' }),
     answerChallenge: (id, payload) => request(`/worker/challenges/${id}/answer`, { method: 'POST', body: payload }),
+    checkStep: (id, payload) => request(`/worker/challenges/${id}/check`, { method: 'POST', body: payload }),
+    certificates: () => request('/worker/certificates'),
+    renewalQuiz: (id) => request(`/worker/certificates/${encodeURIComponent(id)}/renewal`),
+    renew: (id, payload) => request(`/worker/certificates/${encodeURIComponent(id)}/renewal`, { method: 'POST', body: payload }),
+    certificatePdf: async (id) => {
+      const response = await fetch(`${API_BASE_URL}/worker/certificates/${encodeURIComponent(id)}/pdf`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new ApiError('No se pudo descargar el certificado.', response.status);
+      return response.blob();
+    },
+  },
+
+  certificates: {
+    verify: (code) => request(`/certificates/verify/${encodeURIComponent(code)}`),
   },
 
   manager: {

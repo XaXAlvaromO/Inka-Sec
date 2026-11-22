@@ -1,4 +1,4 @@
-"""Crea los 2 retos demo para el trabajador. SOLO para desarrollo. Es idempotente.
+"""Crea los retos demo para el trabajador. SOLO para desarrollo. Es idempotente.
 
 Uso:  python -m app.dev_seed_challenges
 (Con SEED_DEMO_DATA=true ya se crean al arrancar la API.)

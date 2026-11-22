@@ -74,9 +74,17 @@ def challenge_performance(db: Session, company_id: int, created_by: int | None =
     return db.execute(q).all()
 
 
-def topic_errors(db: Session, company_id: int, created_by: int | None = None, user_id: int | None = None, limit: int = 5):
-    """[(tema, intentos, errores)] ordenado por más errores; solo temas con al menos un error."""
-    q = (select(Challenge.topic, func.count(ChallengeAttempt.id), _wrong)
+def topic_errors(db: Session, company_id: int, created_by: int | None = None, user_id: int | None = None,
+                 limit: int = 5, with_people: bool = False):
+    """[(tema, intentos, errores)] ordenado por más errores; solo temas con al menos un error.
+
+    Cuenta el primer intento de cada persona (is_correct). Con with_people agrega cuántas
+    personas distintas practicaron el tema.
+    """
+    columns = [Challenge.topic, func.count(ChallengeAttempt.id), _wrong]
+    if with_people:
+        columns.append(func.count(func.distinct(ChallengeAttempt.user_id)))
+    q = (select(*columns)
          .join(Challenge, Challenge.id == ChallengeAttempt.challenge_id)
          .where(Challenge.company_id == company_id, Challenge.status == "published")
          .group_by(Challenge.topic).having(_wrong > 0)
@@ -86,6 +94,15 @@ def topic_errors(db: Session, company_id: int, created_by: int | None = None, us
     if user_id is not None:
         q = q.where(ChallengeAttempt.user_id == user_id)
     return db.execute(q).all()
+
+
+def own_challenge_practice(db: Session, company_id: int, user_id: int) -> tuple[int, int]:
+    """(retos practicados, retos cuyo último intento fue correcto) de una persona. Solo para ella misma."""
+    rows = db.execute(select(ChallengeAttempt.last_correct, ChallengeAttempt.is_correct)
+                      .join(Challenge, Challenge.id == ChallengeAttempt.challenge_id)
+                      .where(Challenge.company_id == company_id, Challenge.status == "published",
+                             ChallengeAttempt.user_id == user_id)).all()
+    return len(rows), sum(1 for last, first in rows if (first if last is None else last))
 
 
 def get_attempt(db: Session, user_id: int, challenge_id: int) -> ChallengeAttempt | None:

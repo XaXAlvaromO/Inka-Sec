@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.session import Base, engine
+from app.db.migrate import ensure_columns
 from app import models  # noqa: F401
 from app.seed import seed_demo
 from app.core.middleware import SecurityHeadersMiddleware, AuthRateLimitMiddleware, CSRFMiddleware
@@ -12,6 +13,7 @@ from app.core.middleware import SecurityHeadersMiddleware, AuthRateLimitMiddlewa
 async def lifespan(app: FastAPI):
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
+        ensure_columns(engine)
     if settings.seed_demo_data:
         seed_demo()
     yield

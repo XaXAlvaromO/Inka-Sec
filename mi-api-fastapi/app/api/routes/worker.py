@@ -5,8 +5,11 @@ from app.core.dependencies import require_roles
 from app.models.models import CombResponse
 from app.services.dashboard_service import worker_dashboard
 from app.schemas.content import CombPayload, CapacityPayload, ReflectionPayload
-from app.schemas.progress import ChallengeAnswer
-from app.services import progress_service
+from fastapi.responses import Response
+from app.models.models import Company
+from app.schemas.progress import ChallengeAnswer, StepCheck, RenewalPayload
+from app.services import progress_service, certificate_service
+from app.services.certificate_pdf import render_certificate
 
 router=APIRouter(prefix="/worker", tags=["worker"])
 
@@ -44,7 +47,35 @@ def complete(module_id:int,db:Session=Depends(get_db),user=Depends(require_roles
     return {"ok":True,"progress":100,**result}
 @router.post("/challenges/{challenge_id}/answer")
 def answer_challenge(challenge_id:int,payload:ChallengeAnswer,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
-    try: return progress_service.submit_challenge_answer(db,user,challenge_id,payload.choice)
+    # Los retos se pueden repetir: cada envío es un intento más (entrenamiento, no sanción).
+    try: return progress_service.submit_challenge_answer(db,user,challenge_id,choice=payload.choice,choices=payload.choices,marked=payload.marked)
     except progress_service.NotFound as e: raise HTTPException(404,str(e))
-    except progress_service.AlreadyAnswered as e: raise HTTPException(409,str(e))
     except progress_service.InvalidChoice as e: raise HTTPException(422,str(e))
+@router.post("/challenges/{challenge_id}/check")
+def check_step(challenge_id:int,payload:StepCheck,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    try: return progress_service.check_challenge_step(db,user,challenge_id,payload.step,payload.choice)
+    except progress_service.NotFound as e: raise HTTPException(404,str(e))
+    except progress_service.InvalidChoice as e: raise HTTPException(422,str(e))
+
+# ---------- Certificados (RF-07) ----------
+@router.get("/certificates")
+def certificates(db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    return certificate_service.worker_overview(db,user)
+@router.get("/certificates/{cert_id}/renewal")
+def renewal_quiz(cert_id:int,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    try: return certificate_service.renewal_quiz(db,user,cert_id)
+    except certificate_service.NotFound as e: raise HTTPException(404,str(e))
+    except certificate_service.NotRenewable as e: raise HTTPException(409,str(e))
+@router.post("/certificates/{cert_id}/renewal")
+def renew(cert_id:int,payload:RenewalPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    try: return certificate_service.renew(db,user,cert_id,[a.model_dump() for a in payload.answers])
+    except certificate_service.NotFound as e: raise HTTPException(404,str(e))
+    except certificate_service.NotRenewable as e: raise HTTPException(409,str(e))
+    except certificate_service.InvalidAnswers as e: raise HTTPException(422,str(e))
+@router.get("/certificates/{cert_id}/pdf")
+def certificate_pdf(cert_id:int,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
+    cert=db.get(certificate_service.Certificate,cert_id)
+    if not cert or cert.user_id!=user.id: raise HTTPException(404,"Certificado no encontrado")
+    company=db.get(Company,cert.company_id)
+    pdf=render_certificate(cert,holder=user.name,company=company.name if company else "",status=certificate_service.status_of(cert))
+    return Response(pdf,media_type="application/pdf",headers={"Content-Disposition":f'attachment; filename="certificado-{cert.code}.pdf"',"Cache-Control":"no-store"})

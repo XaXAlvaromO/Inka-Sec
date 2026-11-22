@@ -35,8 +35,8 @@ Muchos incidentes en empresas peruanas (fraudes por correo, robo de cuentas, pé
 
 | Rol | Qué puede hacer hoy |
 |---|---|
-| **Trabajador** | Iniciar sesión, ver sus módulos y su avance, completar módulos (diagnóstico COM-B → microlección → preguntas → acción real), ver su reto pendiente y sus temas débiles. |
-| **Gestor de contenido** (código 2FA al correo) | Crea y edita módulos y retos en lenguaje sencillo, organízalos por tema (catálogo y búsqueda), asígnalos a la empresa, un área o una persona con fecha límite, y revisa el desempeño de cada trabajador en lo que creó. |
+| **Trabajador** | Iniciar sesión, ver sus módulos y su avance, completar módulos (diagnóstico COM-B → microlección → preguntas → acción real), practicar retos de tres formatos tantas veces como quiera, ver sus temas débiles y obtener, renovar y descargar sus certificados por tema. |
+| **Gestor de contenido** (código 2FA al correo) | Crea y edita módulos y retos en lenguaje sencillo, organízalos por tema (catálogo y búsqueda), asígnalos a la empresa, un área o una persona con fecha límite, y revisa quién terminó sus módulos, quién practicó sus retos y cuántos certificados hay por tema. Los aciertos de los retos solo se ven agregados (3 o más personas): el reto entrena, no sanciona. |
 | **Administrador** (código 2FA al correo) | Crear, editar rol/estado, desactivar y eliminar usuarios; crear áreas; consultar la auditoría con búsqueda y paginación; ver indicadores por área y exportar el reporte en CSV. |
 
 Cada empresa solo ve sus propios datos: todas las consultas se filtran por empresa (multiempresa).
@@ -101,10 +101,10 @@ Inka-Sec/
     │   ├── schemas/            # validación de entradas (Pydantic)
     │   ├── data/               # 7 módulos COM-B de ejemplo
     │   ├── seed.py             # datos demo (solo desarrollo)
-    │   ├── dev_seed_challenges.py  # crea los 2 retos demo del trabajador (solo desarrollo)
+    │   ├── dev_seed_challenges.py  # crea los retos demo del trabajador (solo desarrollo)
     │   ├── bootstrap_admin.py  # crea el primer administrador real
     │   └── worker.py           # depura auditoría con más de AUDIT_RETENTION_DAYS
-    └── tests/                  # 110 pruebas: funcionales y simulaciones de ataque
+    └── tests/                  # 130 pruebas: funcionales y simulaciones de ataque
 ```
 
 ## Inicio rápido
@@ -161,7 +161,24 @@ Con `SEED_DEMO_DATA=true` la API crea al arrancar la empresa demo, 7 módulos y 
 
 Gestores y administradores reciben un código de 6 dígitos al iniciar sesión. Con `EMAIL_BACKEND=console` (valor por defecto en local) el código aparece en la terminal de la API, así puedes probar sin enviar correos. Para recibirlo en un Gmail real, usa `EMAIL_BACKEND=smtp` (ver abajo).
 
-Los 2 retos de ejemplo se crean con el seed demo (`SEED_DEMO_DATA=true`). Si ya tienes la base de datos, `python -m app.dev_seed_challenges` los agrega sin duplicar (o con `docker compose exec backend ...`).
+Los 4 retos de ejemplo (dos rápidos, uno por pasos y uno de señales) se crean con el seed demo (`SEED_DEMO_DATA=true`); con esa opción activa, los que falten se agregan al reiniciar la API. Si ya tienes la base de datos, `python -m app.dev_seed_challenges` los agrega sin duplicar (o con `docker compose exec backend ...`).
+
+## Retos y certificados
+
+**Retos (entrenan, no califican).** Hay tres formatos:
+
+- **Reto rápido:** un caso y una decisión.
+- **Escenario por pasos:** de 2 a 5 decisiones seguidas; después de cada una se muestra qué pasaría.
+- **Encuentra las señales:** un correo o mensaje dividido en partes; la persona marca las sospechosas y luego ve cuáles encontró, cuáles se le pasaron y cuáles marcó de más.
+
+Se pueden repetir sin límite y fallar siempre muestra la explicación. El primer intento queda guardado solo para estadísticas agregadas por tema; la práctica posterior solo la ve el propio trabajador. El gestor ve quién practicó y cuántas veces, nunca si cada persona acertó, y los porcentajes de aciertos aparecen solo con 3 o más personas.
+
+**Certificados por tema (RF-07).** Un trabajador obtiene el certificado de un tema cuando completa todos los módulos publicados de ese tema que tiene asignados, con al menos **80 %** en las preguntas de práctica de cada uno (se guarda su mejor intento). Completar un módulo exige pasar por el paso de acción real, así que también queda registrada.
+
+- Vale **12 meses**, como la capacitación anual que exigen estándares como PCI DSS 12.6.
+- Desde **30 días antes** de vencer, el trabajador puede renovarlo con un repaso corto de las preguntas del tema (80 % para aprobar, reintentos ilimitados). El certificado anterior queda como "reemplazado".
+- Se descarga en PDF, en blanco y negro, sin puntaje: solo dice que la persona aprobó.
+- Tiene un código único (por ejemplo `INKA-7KQ2-M9XP-4HTR`) que cualquiera puede comprobar en `/verificar/<código>`, sin iniciar sesión.
 
 ## Variables de entorno
 
@@ -187,7 +204,7 @@ Los archivos `.env` **nunca se suben a git**. Se crean a partir de las plantilla
 
 ```bash
 cd mi-api-fastapi
-python -m pytest -q            # 110 pruebas
+python -m pytest -q            # 130 pruebas
 bandit -r app -ll -ii          # análisis estático (SAST)
 
 cd ../frontend
@@ -199,6 +216,8 @@ npm audit --omit=dev           # dependencias vulnerables (SCA)
 Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/conftest.py`), así que no tocan tu base de datos ni dependen de tu `.env`.
 
 - `tests/test_progress.py`: reglas de progreso, retos y paneles por rol.
+- `tests/test_certificates.py`: regla del 80 %, vigencia, renovación, PDF y verificación pública.
+- `tests/test_challenge_formats.py`: retos por pasos y de señales, y columnas nuevas en bases existentes.
 - `tests/test_security.py`: **simulaciones de ataque**. Incluyen:
   - fuerza bruta de contraseña y de 2FA;
   - IP falsificada en `X-Forwarded-For`;
@@ -254,7 +273,9 @@ El archivo `render.yaml` describe tres servicios: la API (Docker), el frontend (
 
 > **Importante:** el plan gratuito de Render bloquea el SMTP saliente (puertos 25, 465 y 587), por eso el correo se envía por la API HTTP de Brevo. Las bases de datos gratuitas caducan a los 30 días y los servicios gratuitos se duermen tras 15 minutos sin uso (la primera carga tarda unos segundos).
 
-> **Si ya desplegaste una versión anterior:** el código 2FA cambió de TOTP a correo y la tabla `auth_challenges` tiene una columna nueva. Como `AUTO_CREATE_TABLES` no modifica tablas existentes, borra la base de datos del servicio (o crea una nueva) antes de volver a desplegar. La tabla `assignments` también cambió (ahora puede apuntar a un reto y guarda quién la creó), así que aplica la misma regla.
+> **Retos y certificados:** las columnas nuevas de `challenges` y `challenge_attempts` se agregan solas al arrancar la API (`app/db/migrate.py`) y los certificados usan una tabla nueva (`topic_certificates`). Para esta actualización **no hace falta borrar la base de datos**.
+
+> **Si ya desplegaste una versión anterior a la de asignaciones:** el código 2FA cambió de TOTP a correo y la tabla `auth_challenges` tiene una columna nueva. Como `AUTO_CREATE_TABLES` no modifica tablas existentes, borra la base de datos del servicio (o crea una nueva) antes de volver a desplegar. La tabla `assignments` también cambió (ahora puede apuntar a un reto y guarda quién la creó), así que aplica la misma regla.
 
 ## API
 
@@ -266,7 +287,9 @@ Prefijo: `/api/v1`. Autenticación por cookie; los métodos que modifican datos 
 | POST | `/auth/login` · `/auth/2fa/verify` | Público |
 | GET · POST | `/auth/me` · `/auth/logout` | Autenticado |
 | GET | `/worker/dashboard` · `/worker/modules/{id}` | Trabajador |
-| POST | `/worker/modules/{id}/comb` · `/worker/modules/{id}/complete` · `/worker/challenges/{id}/answer` | Trabajador |
+| POST | `/worker/modules/{id}/comb` · `/worker/modules/{id}/capacity` · `/worker/modules/{id}/complete` · `/worker/challenges/{id}/answer` · `/worker/challenges/{id}/check` | Trabajador |
+| GET · POST | `/worker/certificates` · `/worker/certificates/{id}/renewal` · `/worker/certificates/{id}/pdf` | Trabajador (solo los suyos) |
+| GET | `/certificates/verify/{código}` | Público (30 consultas por minuto por IP) |
 | GET | `/manager/dashboard` · `/manager/topics` · `/manager/stats` · `/manager/assignable` · `/manager/assignments` | Gestor |
 | GET · POST · PUT | `/manager/modules/{id}` · `/manager/modules` · `/manager/challenges/{id}` · `/manager/challenges` | Gestor (solo lo que creó) |
 | POST · DELETE | `/manager/assignments` · `/manager/assignments/{id}` | Gestor |
@@ -284,9 +307,9 @@ El detalle de cada ruta está en http://localhost:8001/docs mientras corre la AP
 | RF-02 Gestión de usuarios y áreas, auditoría | ✅ Implementado (edición limitada a rol y estado) |
 | RF-03 Gestión de contenidos | ✅ Implementado: módulos y retos en lenguaje sencillo, temas del catálogo, búsqueda, borrador/publicado/archivado |
 | RF-04 Asignaciones, plazos y notificaciones | 🟡 Parcial: asignación a empresa, área o persona con fecha límite; falta notificar por correo |
-| RF-05 Evaluación con retos y retroalimentación | ✅ Implementado: el trabajador responde el reto, la API califica y muestra la explicación |
+| RF-05 Evaluación con retos y retroalimentación | ✅ Implementado: tres formatos (rápido, por pasos, encuentra las señales), práctica sin límite, calificación en la API y explicación en cada intento |
 | RF-06 Seguimiento, estadísticas y reportes | ✅ Implementado (errores agrupados por tema) |
-| RF-07 Certificados | ⏳ Pendiente |
+| RF-07 Certificados | ✅ Implementado: uno por tema (80 % en cada módulo), vigencia de 12 meses, renovación con repaso, PDF y verificación pública |
 
 ## Cómo contribuir
 
