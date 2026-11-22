@@ -148,7 +148,7 @@ function LessonStepper({ step }) {
   );
 }
 
-function ModulePlayer({ moduleId, onBack, onChanged }) {
+function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis módulos' }) {
   const [module, setModule] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [step, setStep] = useState(0);
@@ -240,7 +240,7 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
   return (
     <GenericPage eyebrow={module.topic} title={module.title} description={module.behavior_objective}>
       <article className="panel lesson-panel">
-        <button className="text-button" onClick={onBack}>← Volver a mis módulos</button>
+        <button className="text-button" onClick={onBack}>← {backLabel}</button>
 
         {step < 6 && <>
           <LessonStepper step={step}/>
@@ -379,7 +379,7 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
             <h2>Módulo completado</h2>
             <p className="lesson-lead">Tu avance y tus respuestas quedaron guardados.</p>
             {newCertificates.length > 0 && <div className="feedback-box is-correct" role="status"><strong>¡Obtuviste el certificado de {newCertificates.join(', ')}!</strong><p>Puedes descargarlo en «Certificados». Vale 12 meses.</p></div>}
-            <div className="lesson-actions"><button className="btn btn-primary" onClick={onBack}>Volver a mis módulos</button></div>
+            <div className="lesson-actions"><button className="btn btn-primary" onClick={onBack}>{backLabel}</button></div>
           </section>
         )}
       </article>
@@ -397,6 +397,7 @@ function WorkerViews({ data, view, setView, onRefresh }) {
         moduleId={selectedModule}
         onBack={() => setSelectedModule(null)}
         onChanged={onRefresh}
+        backLabel={view === 'certificados' ? 'Volver a mis certificados' : view === 'inicio' ? 'Volver al inicio' : 'Volver a mis módulos'}
       />
     );
   }
