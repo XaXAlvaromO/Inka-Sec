@@ -573,3 +573,12 @@ def test_brevo_sender_posts_the_code_and_rejects_error_responses(monkeypatch):
 def test_masked_email_hides_most_of_the_address():
     assert mask_email("gestor.lopez@gmail.com") == "g***@gmail.com"
     assert "gestor" not in mask_email("gestor.lopez@gmail.com")
+
+
+def test_cors_allows_every_method_the_frontend_uses():
+    # El gestor edita con PUT: si CORS no lo permite, el navegador muestra "Failed to fetch".
+    for method in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+        r = TestClient(app).options(f"{API}/manager/modules/1", headers={
+            "origin": "http://localhost:5173", "access-control-request-method": method,
+            "access-control-request-headers": "content-type,x-csrf-token"})
+        assert r.status_code == 200, method
