@@ -1,0 +1,7 @@
+# Imagen SOLO para pruebas (pytest + cobertura + Bandit). No se usa en producción.
+# El código no se copia: docker compose lo monta, así siempre se prueba la versión actual.
+FROM python:3.13-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt

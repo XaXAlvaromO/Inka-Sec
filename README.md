@@ -77,7 +77,7 @@ flowchart LR
 
 ```
 Inka-Sec/
-├── docker-compose.yml          # db (PostgreSQL) + backend + frontend
+├── docker-compose.yml          # db (PostgreSQL) + backend + frontend; perfil "test": backend-tests y frontend-tests
 ├── .env.example                # plantilla del .env de la raíz (credenciales de la BD local)
 ├── docs/guia-instalacion.pdf   # guía paso a paso para el equipo
 ├── .github/workflows/ci.yml    # pruebas, SAST, build, auditoría y despliegue
@@ -86,15 +86,21 @@ Inka-Sec/
 │       ├── App.jsx             # vistas por rol (trabajador, gestor, administrador)
 │       ├── InkaSecLayout.jsx   # barra lateral, navegación y menú de usuario
 │       ├── AuthContext.jsx     # estado de sesión
-│       └── api.js              # cliente HTTP (cookies + cabecera CSRF)
+│       ├── challenges.jsx      # retos (rápido, por pasos, señales) y su editor
+│       ├── certificates.jsx    # certificados, renovación y verificación pública
+│       ├── ui.jsx              # piezas de interfaz compartidas
+│       ├── api.js              # cliente HTTP (cookies + cabecera CSRF)
+│       ├── __tests__/          # 67 pruebas de pantallas (Vitest + Testing Library)
+│       └── test/               # preparación de las pruebas y datos de ejemplo
 └── mi-api-fastapi/             # API FastAPI
     ├── .env.example            # plantilla de configuración de la API
     ├── requirements.txt        # dependencias de producción
-    ├── requirements-dev.txt    # + pytest, httpx, bandit
+    ├── requirements-dev.txt    # + pytest, pytest-cov, httpx, bandit
+    ├── Dockerfile.test         # imagen solo para correr las pruebas con Docker
     ├── app/
     │   ├── main.py             # creación de la app y middlewares
     │   ├── core/               # configuración, seguridad, middlewares, dependencias RBAC
-    │   ├── api/routes/         # auth, worker, manager, admin, health
+    │   ├── api/routes/         # auth, worker, manager, admin, health, certificates
     │   ├── services/           # lógica de negocio (auth, progreso, dashboards, auditoría)
     │   ├── repositories/       # consultas a la base de datos
     │   ├── models/             # tablas SQLAlchemy
@@ -202,22 +208,43 @@ Los archivos `.env` **nunca se suben a git**. Se crean a partir de las plantilla
 
 ## Pruebas y análisis de seguridad
 
+**Con Docker (no necesitas instalar Python ni Node en tu PC):**
+
+```bash
+docker compose --profile test run --rm backend-tests    # pytest + cobertura (mínimo 85 %) + Bandit
+docker compose --profile test run --rm frontend-tests   # oxlint + Vitest con cobertura + build
+```
+
+Agrega `--build` la primera vez y cada vez que cambien `requirements*.txt` o `package.json`. Los reportes de cobertura quedan en `mi-api-fastapi/htmlcov/index.html` y `frontend/coverage/index.html`.
+
+**Sin Docker:** todo se instala desde los archivos de requisitos (`pip install -r requirements-dev.txt` y `npm ci`).
+
 ```bash
 cd mi-api-fastapi
-python -m pytest -q            # 132 pruebas
-bandit -r app -ll -ii          # análisis estático (SAST)
+python -m pytest -q --cov=app --cov-report=term-missing   # 132 pruebas + cobertura
+bandit -r app -ll -ii                                     # análisis estático (SAST)
 
 cd ../frontend
 npm run lint                   # oxlint
+npm run test:coverage          # 67 pruebas de pantallas (Vitest + Testing Library) + cobertura
 npm run build                  # compilación de producción
 npm audit --omit=dev           # dependencias vulnerables (SCA)
 ```
+
+| Herramienta | Qué revisa | Dónde se instala |
+|---|---|---|
+| pytest + pytest-cov | Que la API haga lo que debe, y qué porcentaje del código recorren las pruebas | `requirements-dev.txt` |
+| Bandit | Patrones inseguros en el código Python (SAST) | `requirements-dev.txt` |
+| Vitest + Testing Library + coverage-v8 | Las pantallas del frontend, como las usaría una persona, y su cobertura | `devDependencies` de `package.json` |
+| oxlint | Errores comunes en JavaScript/React | `devDependencies` de `package.json` |
+| npm audit | Librerías con vulnerabilidades conocidas (SCA) | Viene con npm |
 
 Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/conftest.py`), así que no tocan tu base de datos ni dependen de tu `.env`.
 
 - `tests/test_progress.py`: reglas de progreso, retos y paneles por rol.
 - `tests/test_certificates.py`: regla del 80 %, vigencia, renovación, PDF y verificación pública.
 - `tests/test_challenge_formats.py`: retos por pasos y de señales, y columnas nuevas en bases existentes.
+- `frontend/src/__tests__/`: pruebas de pantallas con datos reales de la API: inicio de sesión y 2FA, navegación del trabajador, los tres formatos de reto, certificados y verificación, panel del gestor, panel del administrador y el cliente de la API.
 - `tests/test_security.py`: **simulaciones de ataque**. Incluyen:
   - fuerza bruta de contraseña y de 2FA;
   - IP falsificada en `X-Forwarded-For`;
@@ -248,8 +275,9 @@ Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/c
 
 Pipeline en GitHub Actions (`.github/workflows/ci.yml`), con permisos mínimos y los secretos pasados como variables de entorno:
 
-1. **Backend**: pruebas con pytest y SAST con Bandit.
-2. **Frontend**: lint, build y `npm audit` de dependencias de producción (falla con severidad alta o crítica).
+1. **Backend**: pruebas con pytest y cobertura (falla por debajo de 85 %) y SAST con Bandit.
+2. **Frontend**: lint, pruebas con Vitest y cobertura (falla por debajo de los mínimos de `vite.config.js`), build y `npm audit` de dependencias de producción (falla con severidad alta o crítica).
+   Los reportes de cobertura de ambos quedan como artefactos del workflow (pestaña Actions → la ejecución → *Artifacts*).
 3. **Deploy a Dev** en Render (solo en `push` a `main` y solo si los dos jobs anteriores pasan).
 4. **Smoke test**: espera a que `/api/v1/health` responda 200 (verifica también la conexión a la BD).
 5. **Deploy a Producción**: solo si la variable `RENDER_PROD_ENABLED` es `true`.

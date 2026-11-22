@@ -61,5 +61,31 @@ services:
       backend:
         condition: service_healthy
 
+  # ---------------------------------------------------------------- Pruebas
+  # Solo corren cuando se piden (perfil "test"); "docker compose up" no los levanta.
+  #   docker compose --profile test run --rm backend-tests
+  #   docker compose --profile test run --rm frontend-tests
+  # Los reportes de cobertura quedan en mi-api-fastapi/htmlcov/ y frontend/coverage/ (abre index.html).
+
+  backend-tests:
+    profiles: ["test"]
+    build:
+      context: ./mi-api-fastapi
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./mi-api-fastapi:/app
+    # Las pruebas usan SQLite en memoria (tests/conftest.py): no tocan la base de datos real.
+    command: >
+      sh -c "python -m pytest -q --cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=85
+      && bandit -r app -ll -ii"
+
+  frontend-tests:
+    profiles: ["test"]
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules   # usa las dependencias de la imagen, no las de tu PC
+    command: sh -c "npm run lint && npm run test:coverage && npm run build"
+
 volumes:
   inkasec_pg:
