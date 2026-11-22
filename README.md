@@ -104,7 +104,7 @@ Inka-Sec/
     │   ├── dev_seed_challenges.py  # crea los retos demo del trabajador (solo desarrollo)
     │   ├── bootstrap_admin.py  # crea el primer administrador real
     │   └── worker.py           # depura auditoría con más de AUDIT_RETENTION_DAYS
-    └── tests/                  # 131 pruebas: funcionales y simulaciones de ataque
+    └── tests/                  # 132 pruebas: funcionales y simulaciones de ataque
 ```
 
 ## Inicio rápido
@@ -204,7 +204,7 @@ Los archivos `.env` **nunca se suben a git**. Se crean a partir de las plantilla
 
 ```bash
 cd mi-api-fastapi
-python -m pytest -q            # 131 pruebas
+python -m pytest -q            # 132 pruebas
 bandit -r app -ll -ii          # análisis estático (SAST)
 
 cd ../frontend

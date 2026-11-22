@@ -110,7 +110,7 @@ def test_worker_saves_comb_diagnostic(world, client_for):
     payload = {"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 4}]}
     r = worker.post(f"{API}/worker/modules/{world.mods[0].id}/comb", json=payload, headers=csrf(worker))
     assert r.status_code == 200 and r.json() == {"saved": 1}
-    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "saved_reflections": {}}
+    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "reinforcement_days": [7, 30, 90], "saved_reflections": {}}
 
 
 # ------------------------------------------------- módulo y reto del trabajador

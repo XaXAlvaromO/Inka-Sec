@@ -23,6 +23,8 @@ from app.services import visibility
 from app.services import certificate_service
 from app.services.progress_service import MIN_GROUP, rate, topic_errors_for
 
+REINFORCEMENT_DAYS = (7, 30, 90)  # mismos recordatorios que los módulos base
+
 STATUS_LABEL = {"published": "Publicado", "draft": "Borrador", "archived": "Archivado"}
 
 DEFAULT_DIAGNOSTIC_OPPORTUNITY = "Tengo las herramientas o el apoyo necesario para ponerlo en práctica."
@@ -85,6 +87,7 @@ def _module_content(payload, slug: str) -> dict:
         "opportunity_question": payload.opportunity_question,
         "motivation_question": payload.motivation_question,
         "real_action": payload.real_action,
+        "reinforcement_days": list(REINFORCEMENT_DAYS),
     }
 
 

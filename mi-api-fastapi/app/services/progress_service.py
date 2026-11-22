@@ -180,6 +180,8 @@ def topic_errors_for(db: Session, company_id: int, created_by: int | None = None
 def worker_module_view(content: dict) -> dict:
     """El trabajador ve el módulo sin las respuestas correctas: se califican en el servidor."""
     view = dict(content)
+    # Los módulos creados por el gestor antes de este cambio no traían los días de refuerzo.
+    view.setdefault("reinforcement_days", [7, 30, 90])
     view["capacity_questions"] = [
         {"prompt": q.get("prompt", ""), "options": list(q.get("options", []))}
         for q in content.get("capacity_questions", [])

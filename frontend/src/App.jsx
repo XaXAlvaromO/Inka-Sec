@@ -365,7 +365,7 @@ function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis m
             <span className="eyebrow">ACCIÓN REAL</span>
             <h2>Llévalo a tu trabajo</h2>
             <div className="lesson-callout is-action"><Icon name="check" size={20}/><p>{module.real_action}</p></div>
-            <div className="lesson-note"><Icon name="clock" size={16}/><span>Te recordaremos este módulo en {module.reinforcement_days.join(', ')} días.</span></div>
+            {module.reinforcement_days?.length > 0 && <div className="lesson-note"><Icon name="clock" size={16}/><span>Te recordaremos este módulo en {module.reinforcement_days.join(', ')} días.</span></div>}
             {alert}
             <div className="lesson-actions">
               <button className="btn btn-primary" disabled={busy} onClick={finishModule}>{busy ? 'Guardando…' : 'Finalizar módulo'}</button>

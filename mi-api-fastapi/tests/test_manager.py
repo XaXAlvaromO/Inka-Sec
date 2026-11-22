@@ -277,3 +277,12 @@ def test_worker_challenge_list_marks_answered_ones(world, client_for):
     rows = {c["id"]: c for c in worker.get(f"{API}/worker/dashboard").json()["challenges"]}
     assert rows[world.c1.id]["answered"] is True and rows[world.c1.id]["is_correct"] is True
     assert rows[world.c2.id]["answered"] is False and rows[world.c2.id]["is_correct"] is None
+
+
+def test_manager_module_opens_for_the_worker_with_every_step(world, client_for):
+    """Un módulo creado por el gestor trae todo lo que el reproductor necesita, incluido el paso de acción."""
+    manager = client_for(world.mgr)
+    module_id = manager.post(f"{API}/manager/modules", json=module_payload(status="published"), headers=csrf(manager)).json()["id"]
+    body = client_for(world.w1).get(f"{API}/worker/modules/{module_id}").json()
+    for key in ("diagnostic", "micro_lesson", "capacity_questions", "opportunity_question", "motivation_question", "real_action", "reinforcement_days"):
+        assert body.get(key), key
