@@ -387,17 +387,21 @@ function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis m
   );
 }
 
-function WorkerViews({ data, view, setView, onRefresh }) {
-  const [selectedModule, setSelectedModule] = useState(null);
-  const [selectedChallenge, setSelectedChallenge] = useState(null);
+const BACK_LABEL = { certificados: 'Volver a mis certificados', inicio: 'Volver al inicio' };
 
-  if (selectedModule) {
+// El módulo abierto vive en AuthenticatedApp: así la barra marca "Mis módulos" mientras
+// se cursa y "Volver" regresa a la sección desde donde se abrió (Inicio, Certificados…).
+function WorkerViews({ data, view, setView, onRefresh, openModule, onOpenModule, onCloseModule }) {
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const setSelectedModule = onOpenModule;
+
+  if (openModule) {
     return (
       <ModulePlayer
-        moduleId={selectedModule}
-        onBack={() => setSelectedModule(null)}
+        moduleId={openModule.id}
+        onBack={onCloseModule}
         onChanged={onRefresh}
-        backLabel={view === 'certificados' ? 'Volver a mis certificados' : view === 'inicio' ? 'Volver al inicio' : 'Volver a mis módulos'}
+        backLabel={BACK_LABEL[openModule.from] || 'Volver a mis módulos'}
       />
     );
   }
@@ -938,6 +942,7 @@ function AuthenticatedApp() {
   const [auditPage, setAuditPage] = useState(0);
   const [auditQuery, setAuditQuery] = useState('');
   const [managerEditor, setManagerEditor] = useState(null);
+  const [openModule, setOpenModule] = useState(null); // { id, from }: módulo abierto por el trabajador
   const managerView = MANAGER_VIEWS.includes(view) ? view : 'inicio';
   const activeView = user?.role === 'admin' ? view : user?.role === 'manager' ? managerView : 'inicio';
   const navView = user?.role === 'worker' ? view : activeView;
@@ -985,8 +990,20 @@ function AuthenticatedApp() {
       if (window.location.pathname !== path) window.history.pushState(null, '', path);
     }
     setView(nextView);
+    setOpenModule(null);   // un clic en la barra siempre cierra el módulo abierto
     setError('');
     setNotice(null);
+  }
+
+  function openWorkerModule(id) {
+    setOpenModule({ id, from: view });
+    setView('modulos');
+  }
+
+  function closeWorkerModule() {
+    const from = openModule?.from || 'modulos';
+    setOpenModule(null);
+    setView(from);
   }
 
   if (loading) return <LoadingScreen/>;
@@ -1010,7 +1027,7 @@ function AuthenticatedApp() {
     } catch (err) { setNotice({ type: 'error', message: err.message || 'No se pudo exportar el CSV.' }); }
   }
 
-  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)}/>;
+  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={openModule ? `module-${openModule.id}` : view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)} openModule={openModule} onOpenModule={openWorkerModule} onCloseModule={closeWorkerModule}/>;
 
   return <InkaSecLayout activeView={navView} onViewChange={navigate} notifications={data?.notifications || []}><div className="inka-page-shell"><ErrorBoundary key={activeView}>{content}</ErrorBoundary></div>{managerEditor && <ManagerEditorModal kind={managerEditor.kind} id={managerEditor.id} topics={data?.topics || []} onClose={() => setManagerEditor(null)} onSaved={() => setReloadKey((value) => value + 1)}/>} {modal === 'user' && <AdminCreateUserModal onClose={() => setModal(null)} areas={data?.areas || []} onCreated={() => refreshAdmin('Usuario creado correctamente.')}/>} {modal === 'area' && <AdminCreateAreaModal onClose={() => setModal(null)} onCreated={() => refreshAdmin('Área creada correctamente.')}/>} {modal?.type === 'edit' && <AdminEditUserModal user={modal.user} currentUserId={user.id} onClose={() => setModal(null)} onSaved={() => refreshAdmin('Acceso actualizado correctamente.')}/>} {modal?.type === 'delete' && <AdminDeleteUserModal user={modal.user} onClose={() => setModal(null)} onDeleted={() => refreshAdmin('Usuario eliminado correctamente.')}/>}</InkaSecLayout>;
 }
