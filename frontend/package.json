@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node server.mjs",
-    "lint": "oxlint",
+    "lint": "oxlint src vite.config.js server.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "preview": "vite preview"
