@@ -4,7 +4,7 @@ from app.models.models import User, ModuleProgress, AuditLog, Area, Notification
 from app.models.challenge import Challenge, ChallengeAttempt
 from app.repositories import module_repository, progress_repository, user_repository
 from app.schemas.user import user_row
-from app.services import progress_service, visibility, content_service
+from app.services import progress_service, visibility, content_service, certificate_service, challenge_service
 
 def notifications_for(db: Session, user_id: int):
     rows = db.scalars(select(Notification).where(Notification.user_id == user_id).order_by(Notification.created_at.desc()).limit(5)).all()
@@ -18,26 +18,29 @@ def worker_dashboard(db: Session, user: User):
     prog = progress_service.worker_progress(db, user)
     module_cards = [{"id":m.id,"title":m.title,"topic":m.topic,"progress":100 if m.id in done_ids else 0,"time":"10-12 min","icon":"book","due":visibility.due_label(visible_m[m.id])} for m in mods]
     pending = progress_repository.next_pending_challenge(db, user, list(visible_c))
-    answers = {a.challenge_id: a.is_correct for a in db.scalars(select(ChallengeAttempt).where(ChallengeAttempt.user_id == user.id)).all()}
+    attempts = {a.challenge_id: a for a in db.scalars(select(ChallengeAttempt).where(ChallengeAttempt.user_id == user.id)).all()}
     challenge_rows = []
     if visible_c:
         for c in db.scalars(select(Challenge).where(Challenge.id.in_(list(visible_c)), Challenge.status == "published").order_by(Challenge.id)).all():
-            answered = c.id in answers
-            challenge_rows.append({"id":c.id,"title":c.title,"topic":c.topic,"description":c.scenario,"options":list(c.options),
-                                   "due":visibility.due_label(visible_c[c.id]),"answered":answered,
-                                   "is_correct":answers[c.id] if answered else None})
+            a = attempts.get(c.id)
+            last = None if a is None else (a.is_correct if a.last_correct is None else a.last_correct)
+            challenge_rows.append({**challenge_service.public_view(c), "due": visibility.due_label(visible_c[c.id]),
+                                   "answered": a is not None, "is_correct": last, "tries": a.tries if a else 0,
+                                   "score": a.last_score if a else None})
+    certificates = certificate_service.summary_for_dashboard(db, user)
     return {
       "stats":[
         {"label":"Módulos completados","value":f"{prog['modules']['completed']} / {prog['modules']['total']}","helper":"Ruta COM-B","icon":"book","tone":"blue"},
-        {"label":"Retos correctos","value":f"{prog['challenges']['correct']} / {prog['challenges']['total']}","helper":f"{prog['challenges']['answered']} respondidos","icon":"target","tone":"green"},
+        {"label":"Retos practicados","value":f"{prog['challenges']['answered']} / {prog['challenges']['total']}","helper":f"{prog['challenges']['correct']} resueltos sin errores","icon":"target","tone":"green"},
         {"label":"Progreso general","value":f"{prog['modules']['percent']}%","helper":"Módulos terminados","icon":"chart","tone":"blue"},
-        {"label":"Refuerzos","value":"7/30/90","helper":"Días programados","icon":"clock","tone":"amber"}],
+        {"label":"Certificados vigentes","value":f"{certificates['active']} / {certificates['topics']}","helper":"Uno por tema","icon":"award","tone":"amber"}],
       "progress": prog["modules"]["percent"],
       "modules": module_cards,
       "challenges": challenge_rows,
-      "challenge": {"id":pending.id,"title":pending.title,"topic":pending.topic,"description":pending.scenario,"options":list(pending.options),"points":100,"time":"1 min","due":visibility.due_label(visible_c[pending.id])} if pending else None,
+      "challenge": {**challenge_service.public_view(pending),"points":100,"time":"1-3 min","due":visibility.due_label(visible_c[pending.id])} if pending else None,
       "weakTopics": [{"name": w["topic"], "icon": "shield", "errors": w["errors"], "score": w["score"]} for w in prog["weak_topics"]],
-      "notifications": notifications_for(db,user.id)
+      "certificates": certificates,
+      "notifications": certificate_service.notifications(db, user) + notifications_for(db,user.id)
     }
 
 def manager_dashboard(db: Session, user: User):
@@ -47,7 +50,9 @@ def manager_dashboard(db: Session, user: User):
     stats = content_service.stats(db, user)
     module_stats = {m["id"]: m for m in stats["modules"]}
     challenge_stats = {c["id"]: c for c in stats["challenges"]}
-    attempts = sum(c["attempts"] for c in stats["challenges"]); correct = sum(c["correct"] for c in stats["challenges"])
+    # Solo retos con 3 o más personas: con menos, el "promedio" sería el resultado de alguien.
+    shown = [c for c in stats["challenges"] if c["correct"] is not None]
+    attempts = sum(c["attempts"] for c in shown); correct = sum(c["correct"] for c in shown)
     rate = progress_service.rate(correct, attempts)
 
     def row(item, kind, label, mine_by_id):
@@ -65,7 +70,7 @@ def manager_dashboard(db: Session, user: User):
     return {"stats":[
       {"label":"Contenidos publicados","value":str(sum(1 for m in mods if m.status=='published')),"helper":f"{len(mods)} módulos y {len(challenges)} retos en la empresa","icon":"book","tone":"blue"},
       {"label":"Usuarios alcanzados","value":str(users_count),"helper":"Empresa actual","icon":"users","tone":"blue"},
-      {"label":"Tasa de aprobación","value":"--" if rate is None else f"{rate}%","helper":"Aciertos en tus retos" if rate is not None else "Disponible con intentos","icon":"check","tone":"green"},
+      {"label":"Tasa de aprobación","value":"--" if rate is None else f"{rate}%","helper":"Primer intento, en grupos de 3 o más" if rate is not None else "Se muestra con 3 o más personas","icon":"check","tone":"green"},
       {"label":"Borradores","value":str(drafts),"helper":"Tuyos, sin publicar","icon":"edit","tone":"amber"}],
       "content":[row(m, "module", "Módulo", module_stats) for m in mods],
       "challenges":[row(c, "challenge", "Reto", challenge_stats) for c in challenges],

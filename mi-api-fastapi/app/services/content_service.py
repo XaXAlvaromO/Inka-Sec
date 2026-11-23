@@ -2,7 +2,9 @@
 
 - Crear y editar: solo el contenido que el gestor creó (los módulos base de la empresa son de lectura).
 - Asignar: cualquier contenido publicado de la empresa, con fecha límite opcional.
-- Estadísticas: solo del contenido que el gestor creó, por trabajador.
+- Estadísticas: solo del contenido que el gestor creó. Módulos: quién terminó. Retos: solo quién
+  practicó; los aciertos se muestran agregados y únicamente con 3 o más personas (el reto entrena,
+  no sanciona).
 """
 from __future__ import annotations
 
@@ -18,7 +20,10 @@ from app.models.challenge import Challenge, ChallengeAttempt
 from app.models.models import Area, Assignment, LearningModule, ModuleProgress, User, utcnow
 from app.repositories import progress_repository
 from app.services import visibility
-from app.services.progress_service import rate, topic_errors_for
+from app.services import certificate_service
+from app.services.progress_service import MIN_GROUP, rate, topic_errors_for
+
+REINFORCEMENT_DAYS = (7, 30, 90)  # mismos recordatorios que los módulos base
 
 STATUS_LABEL = {"published": "Publicado", "draft": "Borrador", "archived": "Archivado"}
 
@@ -82,6 +87,7 @@ def _module_content(payload, slug: str) -> dict:
         "opportunity_question": payload.opportunity_question,
         "motivation_question": payload.motivation_question,
         "real_action": payload.real_action,
+        "reinforcement_days": list(REINFORCEMENT_DAYS),
     }
 
 
@@ -154,7 +160,9 @@ def create_challenge(db: Session, manager: User, payload) -> Challenge:
     _check_topic(payload.topic)
     challenge = Challenge(
         company_id=manager.company_id, title=payload.title, topic=payload.topic, scenario=payload.scenario,
-        options=list(payload.options), correct_index=payload.correct_index, feedback=payload.feedback,
+        kind=payload.kind, content=payload.content(),
+        options=list(payload.options) if payload.kind == "quick" else [],
+        correct_index=payload.correct_index if payload.kind == "quick" else 0, feedback=payload.feedback,
         status=payload.status, created_by=manager.id,
     )
     db.add(challenge)
@@ -166,11 +174,16 @@ def create_challenge(db: Session, manager: User, payload) -> Challenge:
 def update_challenge(db: Session, manager: User, challenge_id: int, payload) -> Challenge:
     challenge = _owned_challenge(db, manager, challenge_id)
     _check_topic(payload.topic, current=challenge.topic)
+    current_kind = challenge.kind or "quick"
+    if payload.kind != current_kind and db.scalar(select(ChallengeAttempt.id).where(ChallengeAttempt.challenge_id == challenge.id).limit(1)):
+        raise ContentError("Este reto ya tiene intentos: no puedes cambiar su formato. Crea un reto nuevo.")
     challenge.title = payload.title
     challenge.topic = payload.topic
     challenge.scenario = payload.scenario
-    challenge.options = list(payload.options)
-    challenge.correct_index = payload.correct_index
+    challenge.kind = payload.kind
+    challenge.content = payload.content()
+    challenge.options = list(payload.options) if payload.kind == "quick" else []
+    challenge.correct_index = payload.correct_index if payload.kind == "quick" else 0
     challenge.feedback = payload.feedback
     challenge.status = payload.status
     db.commit()
@@ -180,8 +193,10 @@ def update_challenge(db: Session, manager: User, challenge_id: int, payload) -> 
 
 def challenge_form(db: Session, manager: User, challenge_id: int) -> dict:
     challenge = _owned_challenge(db, manager, challenge_id)
+    content = challenge.content or {}
     return {"id": challenge.id, "title": challenge.title, "topic": challenge.topic, "scenario": challenge.scenario,
-            "options": list(challenge.options), "correct_index": challenge.correct_index,
+            "kind": challenge.kind or "quick", "options": list(challenge.options), "correct_index": challenge.correct_index,
+            "steps": content.get("steps", []), "segments": content.get("segments", []),
             "feedback": challenge.feedback, "status": challenge.status}
 
 
@@ -281,10 +296,10 @@ def stats(db: Session, manager: User) -> dict:
 
     attempts = {}
     if challenges:
-        for challenge_id, user_id, is_correct in db.execute(select(
-                ChallengeAttempt.challenge_id, ChallengeAttempt.user_id, ChallengeAttempt.is_correct)
+        for challenge_id, user_id, is_correct, tries in db.execute(select(
+                ChallengeAttempt.challenge_id, ChallengeAttempt.user_id, ChallengeAttempt.is_correct, ChallengeAttempt.tries)
                 .where(ChallengeAttempt.challenge_id.in_([c.id for c in challenges]))).all():
-            attempts[(challenge_id, user_id)] = is_correct
+            attempts[(challenge_id, user_id)] = (is_correct, tries or 1)
 
     module_rows = []
     for m in modules:
@@ -302,19 +317,26 @@ def stats(db: Session, manager: User) -> dict:
     challenge_rows = []
     for c in challenges:
         audience = visibility.audience(db, workers, "challenge", c.id)
-        rows = []
+        rows, first_correct = [], 0
         for w in audience:
-            if (c.id, w.id) in attempts:
-                rows.append({"user_id": w.id, "name": w.name, "area": w.area.name if w.area else "Sin área",
-                             "answered": True, "correct": attempts[(c.id, w.id)]})
-            else:
-                rows.append({"user_id": w.id, "name": w.name, "area": w.area.name if w.area else "Sin área",
-                             "answered": False, "correct": None})
-        answered = [r for r in rows if r["answered"]]
-        correct = sum(1 for r in answered if r["correct"])
+            attempt = attempts.get((c.id, w.id))
+            if attempt:
+                first_correct += attempt[0]
+            # Solo participación: el gestor no ve si cada persona acertó.
+            rows.append({"user_id": w.id, "name": w.name, "area": w.area.name if w.area else "Sin área",
+                         "answered": attempt is not None, "tries": attempt[1] if attempt else 0})
+        practiced = sum(1 for r in rows if r["answered"])
+        visible_rate = practiced >= MIN_GROUP
         challenge_rows.append({"id": c.id, "title": c.title, "topic": c.topic, "status": c.status,
-                               "audience": len(audience), "attempts": len(answered), "correct": correct,
-                               "success_rate": rate(correct, len(answered)), "workers": rows})
+                               "kind": c.kind or "quick", "audience": len(audience), "attempts": practiced,
+                               "correct": first_correct if visible_rate else None,
+                               "success_rate": rate(first_correct, practiced) if visible_rate else None,
+                               "workers": rows})
 
-    return {"modules": module_rows, "challenges": challenge_rows,
+    certified = certificate_service.worker_certificate_count(db, manager.company_id)
+    certificates = certificate_service.company_certificates(db, manager.company_id, workers)
+    return {"modules": module_rows, "challenges": challenge_rows, "min_group": MIN_GROUP,
+            "certificates": certificates,
+            "workers": [{"user_id": w.id, "name": w.name, "area": w.area.name if w.area else "Sin área",
+                         "certificates": certified.get(w.id, 0)} for w in workers],
             "topic_errors": topic_errors_for(db, manager.company_id, created_by=manager.id)}

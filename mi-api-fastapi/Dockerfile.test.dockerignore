@@ -1,0 +1,4 @@
+# La imagen de pruebas solo necesita los archivos de requisitos (el código se monta al correr).
+*
+!requirements.txt
+!requirements-dev.txt

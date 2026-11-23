@@ -4,22 +4,13 @@ import InkaSecLayout, { Icon } from './InkaSecLayout';
 import { api } from './api';
 import { ADMIN_PATHS, adminViewFromPath } from './adminRoutes';
 import ParticleNetwork from './ParticleNetwork';
+import { EmptyState, Feedback, GenericPage, LoadingScreen, OptionsEditor, ProgressBar, STATUS_OPTIONS } from './ui';
+import { ChallengeEditor, ChallengePlayer, KIND_LABEL } from './challenges';
+import { CertificateHomeCard, CertificatesPage, VerifyCertificatePage } from './certificates';
 import './inka-sec.css';
-
-function ProgressBar({ value, danger = false }) {
-  return <div className={`progress-track ${danger ? 'is-danger' : ''}`} aria-label={`${value}%`}><span style={{ width: `${Math.max(0, Math.min(100, value))}%` }}/></div>;
-}
 
 function StatCard({ item }) {
   return <article className="stat-card"><span className={`stat-icon tone-${item.tone || 'violet'}`}><Icon name={item.icon}/></span><div><small>{item.label}</small><strong>{item.value}</strong><p>{item.helper}</p></div></article>;
-}
-
-function EmptyState({ title, description }) {
-  return <div className="empty-state"><span><Icon name="shield" size={28}/></span><h3>{title}</h3><p>{description}</p></div>;
-}
-
-function LoadingScreen() {
-  return <div className="inka-loading"><span className="inka-brand-mark"><Icon name="shield" size={22}/></span><div className="loading-bar"><span/></div><p>Preparando tu espacio seguro…</p></div>;
 }
 
 function LoginPage() {
@@ -87,7 +78,7 @@ function WorkerHome({ data, setView, onOpen, onChallenge }) {
     <section className="page-hero compact-hero"><div><span className="eyebrow">TU RUTA DE APRENDIZAJE</span><h1>Aprende a protegerte <span>con decisiones simples.</span></h1><p>Continúa donde lo dejaste y practica con situaciones reales de tu trabajo.</p><div className="hero-actions"><button className="btn btn-primary" onClick={() => setView('modulos')}>Continuar aprendiendo <Icon name="chevron" size={17}/></button><button className="btn btn-secondary" onClick={() => setView('progreso')}>Ver mi progreso</button></div></div><article className="progress-summary"><div className="progress-ring" style={{ '--value': `${data.progress * 3.6}deg` }}><span><strong>{data.progress}%</strong><small>completado</small></span></div><div><small>Avance general</small><h3>Tu constancia está dando resultados</h3><p>Completa 2 módulos más para finalizar la ruta básica.</p></div></article></section>
     <section className="stats-grid">{data.stats.map((item) => <StatCard key={item.label} item={item}/>)}</section>
     <section className="two-col-grid"><article className="panel"><div className="panel-head"><div><span className="eyebrow">ASIGNADOS A TI</span><h2>Continúa aprendiendo</h2></div><button className="text-button" onClick={() => setView('modulos')}>Ver todos</button></div><ModuleList modules={data.modules} onOpen={onOpen} /></article><ChallengeCard challenge={data.challenge} onResolve={onChallenge}/></section>
-    <section className="two-col-grid lower"><article className="panel"><div className="panel-head"><div><span className="eyebrow">MEJORA CONTINUA</span><h2>Temas a reforzar</h2></div></div><div className="topic-list">{data.weakTopics.map((item) => <div key={item.name}><span className="topic-icon"><Icon name={item.icon}/></span><div><strong>{item.name}</strong><small>{item.errors} errores recientes</small></div><div className="topic-score"><b>{item.score}%</b><ProgressBar value={item.score}/></div></div>)}</div></article><article className="panel certificate-card"><span className="certificate-mark"><Icon name="award" size={28}/></span><span className="eyebrow">CERTIFICACIÓN</span><h2>Fundamentos de seguridad digital</h2><p>Tu certificado se habilitará al completar la ruta y aprobar los retos requeridos.</p><button className="btn btn-secondary" onClick={() => setView('certificados')}>Ver certificado</button></article></section>
+    <section className="two-col-grid lower"><article className="panel"><div className="panel-head"><div><span className="eyebrow">MEJORA CONTINUA</span><h2>Temas a reforzar</h2></div></div><div className="topic-list">{data.weakTopics.map((item) => <div key={item.name}><span className="topic-icon"><Icon name={item.icon}/></span><div><strong>{item.name}</strong><small>{item.errors} errores recientes</small></div><div className="topic-score"><b>{item.score}%</b><ProgressBar value={item.score}/></div></div>)}</div></article><CertificateHomeCard summary={data.certificates} setView={setView}/></section>
   </>;
 }
 
@@ -131,7 +122,7 @@ function ModuleList({ modules, onOpen }) {
 
 function ChallengeCard({ challenge, onResolve }) {
   if (!challenge) return <article className="panel challenge-card"><EmptyState title="Sin retos pendientes" description="Cuando haya un nuevo reto asignado aparecerá aquí."/></article>;
-  return <article className="panel challenge-card"><div className="challenge-tag"><Icon name="target" size={16}/> Reto de la semana</div><span className="challenge-icon"><Icon name="shield" size={34}/></span><h2>{challenge.title}</h2><p>{challenge.description}</p><div className="challenge-meta"><span>{challenge.time}</span><span>{challenge.due}</span></div><button className="btn btn-primary btn-block" onClick={() => onResolve?.(challenge)}>Resolver reto</button></article>;
+  return <article className="panel challenge-card"><div className="challenge-tag"><Icon name="target" size={16}/> {KIND_LABEL[challenge.kind] || 'Reto de la semana'}</div><span className="challenge-icon"><Icon name="shield" size={34}/></span><h2>{challenge.title}</h2><p>{challenge.description}</p><div className="challenge-meta"><span>{challenge.time}</span><span>{challenge.due}</span></div><button className="btn btn-primary btn-block" onClick={() => onResolve?.(challenge)}>Practicar reto</button></article>;
 }
 
 const LESSON_STEPS = ['Diagnóstico', 'Aprende', 'Practica', 'Oportunidad', 'Motivación', 'Acción'];
@@ -157,17 +148,7 @@ function LessonStepper({ step }) {
   );
 }
 
-function Feedback({ result, correctText }) {
-  return (
-    <div className={`feedback-box ${result.is_correct ? 'is-correct' : 'is-wrong'}`} role="status">
-      <strong>{result.is_correct ? '¡Correcto!' : 'Revisa esta respuesta'}</strong>
-      {!result.is_correct && correctText && <p>Respuesta correcta: {correctText}</p>}
-      {result.feedback && <p>{result.feedback}</p>}
-    </div>
-  );
-}
-
-function ModulePlayer({ moduleId, onBack, onChanged }) {
+function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis módulos' }) {
   const [module, setModule] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [step, setStep] = useState(0);
@@ -177,6 +158,7 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
   const [reflections, setReflections] = useState({ oportunidad: '', motivacion: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [newCertificates, setNewCertificates] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -231,6 +213,7 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
         answers: module.capacity_questions.map((_, index) => ({ index, choice: Number(answers[index]) })),
       });
       setGrade(result);
+      if (result.new_certificates?.length) { setNewCertificates(result.new_certificates); await onChanged?.(); }
     });
   }
 
@@ -243,17 +226,21 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
 
   function finishModule() {
     return run(async () => {
-      await api.worker.completeModule(moduleId);
+      const result = await api.worker.completeModule(moduleId);
+      if (result?.new_certificates?.length) setNewCertificates(result.new_certificates);
       await onChanged?.();
     }, 6);
   }
+
+  // Repetir la práctica vuelve a la microlección: así el segundo intento es repaso, no adivinar.
+  function retryPractice() { setAnswers({}); setGrade(null); setError(''); setStep(1); }
 
   const alert = error && <div className="form-error" role="alert">{error}</div>;
 
   return (
     <GenericPage eyebrow={module.topic} title={module.title} description={module.behavior_objective}>
       <article className="panel lesson-panel">
-        <button className="text-button" onClick={onBack}>← Volver a mis módulos</button>
+        <button className="text-button" onClick={onBack}>← {backLabel}</button>
 
         {step < 6 && <>
           <LessonStepper step={step}/>
@@ -316,9 +303,9 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
                       type="button"
                       role="radio"
                       aria-checked={Number(answers[qi]) === oi}
-                      disabled={busy}
+                      disabled={busy || Boolean(grade)}
                       className={`choice ${Number(answers[qi]) === oi ? 'is-selected' : ''}`}
-                      onClick={() => { setAnswers({ ...answers, [qi]: oi }); setGrade(null); }}
+                      onClick={() => setAnswers({ ...answers, [qi]: oi })}
                     >
                       <span className="choice-dot" aria-hidden="true"/>
                       {option}
@@ -329,11 +316,16 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
               </fieldset>
             ))}
             {grade && <p className="lesson-score">Respondiste {grade.correct} de {grade.total} correctamente.</p>}
+            {grade && grade.percent < grade.pass_percent && <div className="lesson-note"><Icon name="award" size={16}/><span>Para el certificado de {module.topic} necesitas {grade.pass_percent} % en esta práctica. Puedes continuar y repetirla cuando quieras: se guarda tu mejor resultado.</span></div>}
+            {newCertificates.length > 0 && <div className="feedback-box is-correct" role="status"><strong>¡Obtuviste el certificado de {newCertificates.join(', ')}!</strong><p>Lo encuentras en «Certificados».</p></div>}
             {alert}
             <div className="lesson-actions">
               {!grade
                 ? <button className="btn btn-secondary" disabled={!capacityComplete || busy} onClick={checkCapacity}>{busy ? 'Revisando…' : 'Revisar respuestas'}</button>
-                : <button className="btn btn-primary" onClick={() => setStep(3)}>Continuar</button>}
+                : <>
+                  {grade.percent < grade.pass_percent && <button className="btn btn-secondary" onClick={retryPractice}>Repasar y repetir</button>}
+                  <button className="btn btn-primary" onClick={() => setStep(3)}>Continuar</button>
+                </>}
             </div>
           </section>
         )}
@@ -373,7 +365,7 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
             <span className="eyebrow">ACCIÓN REAL</span>
             <h2>Llévalo a tu trabajo</h2>
             <div className="lesson-callout is-action"><Icon name="check" size={20}/><p>{module.real_action}</p></div>
-            <div className="lesson-note"><Icon name="clock" size={16}/><span>Te recordaremos este módulo en {module.reinforcement_days.join(', ')} días.</span></div>
+            {module.reinforcement_days?.length > 0 && <div className="lesson-note"><Icon name="clock" size={16}/><span>Te recordaremos este módulo en {module.reinforcement_days.join(', ')} días.</span></div>}
             {alert}
             <div className="lesson-actions">
               <button className="btn btn-primary" disabled={busy} onClick={finishModule}>{busy ? 'Guardando…' : 'Finalizar módulo'}</button>
@@ -386,7 +378,8 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
             <span className="security-seal"><Icon name="check" size={30}/></span>
             <h2>Módulo completado</h2>
             <p className="lesson-lead">Tu avance y tus respuestas quedaron guardados.</p>
-            <div className="lesson-actions"><button className="btn btn-primary" onClick={onBack}>Volver a mis módulos</button></div>
+            {newCertificates.length > 0 && <div className="feedback-box is-correct" role="status"><strong>¡Obtuviste el certificado de {newCertificates.join(', ')}!</strong><p>Puedes descargarlo en «Certificados». Vale 12 meses.</p></div>}
+            <div className="lesson-actions"><button className="btn btn-primary" onClick={onBack}>{backLabel}</button></div>
           </section>
         )}
       </article>
@@ -394,63 +387,21 @@ function ModulePlayer({ moduleId, onBack, onChanged }) {
   );
 }
 
-function ChallengePlayer({ challenge, onBack, onDone }) {
-  const [choice, setChoice] = useState(null);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+const BACK_LABEL = { certificados: 'Volver a mis certificados', inicio: 'Volver al inicio' };
 
-  async function submit() {
-    setBusy(true); setError('');
-    try { setResult(await api.worker.answerChallenge(challenge.id, { choice })); }
-    catch (err) { setError(err.message || 'No se pudo enviar tu respuesta.'); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <GenericPage eyebrow={challenge.topic || 'RETO PRÁCTICO'} title={challenge.title} description="Lee el caso y elige la decisión que tomarías. Solo tienes un intento.">
-      <article className="panel lesson-panel">
-        <button className="text-button" onClick={onBack}>← Volver</button>
-        <div className="scenario-box"><Icon name="target" size={20}/><p>{challenge.description}</p></div>
-        <div className="choice-list" role="radiogroup" aria-label="Opciones del reto">
-          {challenge.options.map((option, index) => {
-            const isCorrect = result && result.correct_index === index;
-            const isWrong = result && !result.is_correct && choice === index;
-            const classes = ['choice', choice === index && 'is-selected', isCorrect && 'is-correct', isWrong && 'is-wrong'].filter(Boolean).join(' ');
-            return (
-              <button key={index} type="button" role="radio" aria-checked={choice === index} disabled={Boolean(result) || busy} className={classes} onClick={() => setChoice(index)}>
-                <span className="choice-letter" aria-hidden="true">{String.fromCharCode(65 + index)}</span>
-                {option}
-              </button>
-            );
-          })}
-        </div>
-        {error && <div className="form-error" role="alert">{error}</div>}
-        {result ? (
-          <>
-            <Feedback result={result}/>
-            <div className="lesson-actions"><button className="btn btn-primary" onClick={onDone}>Volver al inicio</button></div>
-          </>
-        ) : (
-          <div className="lesson-actions">
-            <button className="btn btn-primary" disabled={choice === null || busy} onClick={submit}>{busy ? 'Enviando…' : 'Enviar respuesta'}</button>
-          </div>
-        )}
-      </article>
-    </GenericPage>
-  );
-}
-
-function WorkerViews({ data, view, setView, onRefresh }) {
-  const [selectedModule, setSelectedModule] = useState(null);
+// El módulo abierto vive en AuthenticatedApp: así la barra marca "Mis módulos" mientras
+// se cursa y "Volver" regresa a la sección desde donde se abrió (Inicio, Certificados…).
+function WorkerViews({ data, view, setView, onRefresh, openModule, onOpenModule, onCloseModule }) {
   const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const setSelectedModule = onOpenModule;
 
-  if (selectedModule) {
+  if (openModule) {
     return (
       <ModulePlayer
-        moduleId={selectedModule}
-        onBack={() => setSelectedModule(null)}
+        moduleId={openModule.id}
+        onBack={onCloseModule}
         onChanged={onRefresh}
+        backLabel={BACK_LABEL[openModule.from] || 'Volver a mis módulos'}
       />
     );
   }
@@ -499,7 +450,7 @@ function WorkerViews({ data, view, setView, onRefresh }) {
       <GenericPage
         eyebrow="PRÁCTICA"
         title="Mis retos"
-        description="Escenarios cortos para decidir cómo actuarías en tu trabajo. Cada reto se responde una sola vez."
+        description="Escenarios para practicar cómo actuarías en tu trabajo. Puedes repetirlos las veces que quieras: tus resultados solo los ves tú."
       >
         <section className="challenge-list">
           {challenges.length === 0
@@ -507,13 +458,14 @@ function WorkerViews({ data, view, setView, onRefresh }) {
             : challenges.map((item) => (
               <article className="panel challenge-row" key={item.id}>
                 <div>
-                  <span className="eyebrow">{item.topic}</span>
+                  <span className="eyebrow">{item.topic} · {KIND_LABEL[item.kind] || 'Reto'}</span>
                   <h2>{item.title}</h2>
                   <p className="muted-text">{item.due}</p>
                 </div>
-                {item.answered
-                  ? <span className={`status ${item.is_correct ? 'status-publicado' : 'status-borrador'}`}>{item.is_correct ? 'Respondido · correcto' : 'Respondido · revisar'}</span>
-                  : <button className="btn btn-primary" onClick={() => setSelectedChallenge(item)}>Responder</button>}
+                <div className="challenge-row-actions">
+                  {item.answered && <span className={`status ${item.is_correct ? 'status-publicado' : 'status-borrador'}`}>{item.is_correct ? 'Último intento sin errores' : 'Puedes mejorar'} · {item.tries} {item.tries === 1 ? 'intento' : 'intentos'}</span>}
+                  <button className={`btn ${item.answered ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setSelectedChallenge(item)}>{item.answered ? 'Practicar de nuevo' : 'Practicar'}</button>
+                </div>
               </article>
             ))}
         </section>
@@ -561,18 +513,7 @@ function WorkerViews({ data, view, setView, onRefresh }) {
 
   if (view === 'certificados') {
     return (
-      <GenericPage
-        eyebrow="CERTIFICACIÓN"
-        title="Mis certificados"
-        description="Aquí podrás consultar los certificados obtenidos."
-      >
-        <article className="panel">
-          <EmptyState
-            title="Certificado pendiente"
-            description="El certificado estará disponible cuando completes la ruta y cumplas los requisitos."
-          />
-        </article>
-      </GenericPage>
+      <CertificatesPage onOpenModule={setSelectedModule} onChanged={onRefresh}/>
     );
   }
 
@@ -587,7 +528,6 @@ function WorkerViews({ data, view, setView, onRefresh }) {
 }
 
 const MANAGER_VIEWS = ['inicio', 'contenido', 'retos', 'asignaciones', 'estadisticas'];
-const STATUS_OPTIONS = [{ value: 'draft', label: 'Borrador' }, { value: 'published', label: 'Publicado' }, { value: 'archived', label: 'Archivado' }];
 const dateLabel = (value) => (value ? new Date(value).toLocaleDateString('es-PE', { dateStyle: 'medium' }) : '—');
 
 async function loadManagerPanel(view) {
@@ -705,12 +645,12 @@ function ManagerAssignments({ data, onChanged }) {
 
 function WorkerBreakdown({ kind, workers }) {
   if (!workers.length) return <p className="muted-text">Nadie está en el público de este contenido todavía.</p>;
-  return <table className="inner-table"><thead><tr><th>Trabajador</th><th>Área</th><th>Estado</th></tr></thead><tbody>{workers.map((w) => <tr key={w.user_id}><td>{w.name}</td><td>{w.area}</td><td>{kind === 'module' ? (w.completed ? `Terminó el ${dateLabel(w.completed_at)}` : 'Pendiente') : (!w.answered ? 'Sin responder' : w.correct ? 'Correcto' : 'Incorrecto')}</td></tr>)}</tbody></table>;
+  return <table className="inner-table"><thead><tr><th>Trabajador</th><th>Área</th><th>Estado</th></tr></thead><tbody>{workers.map((w) => <tr key={w.user_id}><td>{w.name}</td><td>{w.area}</td><td>{kind === 'module' ? (w.completed ? `Terminó el ${dateLabel(w.completed_at)}` : 'Pendiente') : (!w.answered ? 'Sin practicar' : `Practicó · ${w.tries} ${w.tries === 1 ? 'intento' : 'intentos'}`)}</td></tr>)}</tbody></table>;
 }
 
 function StatTable({ kind, rows, open, onToggle }) {
   if (!rows.length) return <EmptyState title="Sin contenido propio" description="Crea un módulo o reto para ver aquí su desempeño."/>;
-  return <div className="table-wrap"><table><thead><tr><th>Título</th><th>Tema</th><th>Público</th><th>{kind === 'module' ? 'Terminaron' : 'Respondieron'}</th><th>{kind === 'module' ? '% completado' : '% acierto'}</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{rows.map((row) => {
+  return <div className="table-wrap"><table><thead><tr><th>Título</th><th>Tema</th><th>Público</th><th>{kind === 'module' ? 'Terminaron' : 'Practicaron'}</th><th>{kind === 'module' ? '% completado' : '% acierto (1.er intento)'}</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{rows.map((row) => {
     const key = `${kind}-${row.id}`;
     const answered = kind === 'module' ? row.completed : row.attempts;
     const share = kind === 'module' ? row.completion_rate : row.success_rate;
@@ -725,19 +665,28 @@ function ManagerStats({ data }) {
   const toggle = (key) => setOpen((current) => (current === key ? null : key));
   const completions = modules.reduce((sum, m) => sum + m.completed, 0);
   const possible = modules.reduce((sum, m) => sum + m.audience, 0);
-  const attempts = challenges.reduce((sum, c) => sum + c.attempts, 0);
-  const correct = challenges.reduce((sum, c) => sum + c.correct, 0);
+  const shown = challenges.filter((c) => c.correct != null);
+  const attempts = shown.reduce((sum, c) => sum + c.attempts, 0);
+  const correct = shown.reduce((sum, c) => sum + c.correct, 0);
+  const minGroup = data.stats?.min_group || 3;
+  const certificates = data.stats?.certificates || [];
   return <GenericPage eyebrow="ANALÍTICA" title="Estadísticas" description="Desempeño de lo que creaste, por contenido y por trabajador. Sirve para decidir qué reforzar.">
     <section className="two-col-grid manager-grid">
       <article className="panel"><span className="eyebrow">ANÁLISIS</span><h2>Temas con más errores</h2><TopicErrors items={data.stats?.topic_errors || []}/></article>
       <article className="panel"><span className="eyebrow">RESUMEN</span><h2>Tu contenido</h2>
         <p>Módulos creados: <strong>{modules.length}</strong> · Retos creados: <strong>{challenges.length}</strong></p>
         <p>Módulos terminados: <strong>{completions}</strong> de {possible} posibles</p>
-        <p>Aciertos en retos: <strong>{attempts ? `${Math.round((correct * 100) / attempts)}%` : '—'}</strong> ({correct} de {attempts} respuestas)</p>
+        <p>Aciertos en retos (primer intento): <strong>{attempts ? `${Math.round((correct * 100) / attempts)}%` : '—'}</strong>{attempts ? ` (${correct} de ${attempts})` : ''}</p>
+        <p className="form-note">Los retos entrenan, no califican: no verás si cada persona acertó. Los porcentajes de aciertos aparecen solo cuando practican {minGroup} o más personas.</p>
       </article>
     </section>
+    <article className="panel"><div className="panel-head"><div><span className="eyebrow">CERTIFICADOS</span><h2>Certificados vigentes por tema</h2></div></div>
+      {certificates.length === 0
+        ? <EmptyState title="Aún no hay certificados" description="Aparecerán cuando alguien complete todos los módulos de un tema con 80 % o más."/>
+        : <div className="table-wrap"><table><thead><tr><th>Tema</th><th>Vigentes</th><th>Por vencer</th><th>Vencidos</th><th>Trabajadores</th></tr></thead><tbody>{certificates.map((c) => <tr key={c.topic}><td><strong>{c.topic}</strong></td><td>{c.active + c.expiring}</td><td>{c.expiring}</td><td>{c.expired}</td><td>{c.workers}</td></tr>)}</tbody></table></div>}
+    </article>
     <article className="panel"><div className="panel-head"><div><span className="eyebrow">MÓDULOS</span><h2>Terminaciones por contenido</h2></div></div><StatTable kind="module" rows={modules} open={open} onToggle={toggle}/></article>
-    <article className="panel"><div className="panel-head"><div><span className="eyebrow">RETOS</span><h2>Respuestas por contenido</h2></div></div><StatTable kind="challenge" rows={challenges} open={open} onToggle={toggle}/></article>
+    <article className="panel"><div className="panel-head"><div><span className="eyebrow">RETOS</span><h2>Práctica por reto</h2></div></div><StatTable kind="challenge" rows={challenges} open={open} onToggle={toggle}/></article>
   </GenericPage>;
 }
 
@@ -812,10 +761,6 @@ function AdminViews({ data, view, onCreateUser, onCreateArea, onExport, onEditUs
   return <GenericPage eyebrow="INDICADORES" title="Reportes" description="Consulta indicadores registrados y exporta un archivo CSV.">{feedback}<section className="stats-grid"><StatCard item={{label:'Usuarios activos',value:data.report.active_users,helper:`De ${data.report.total_users} registrados`,icon:'users',tone:'blue'}}/><StatCard item={{label:'Avance registrado',value:data.report.average_progress == null ? '—' : `${data.report.average_progress}%`,helper:'Promedio de registros existentes',icon:'chart',tone:'green'}}/><StatCard item={{label:'Módulos completados',value:data.report.completed_modules,helper:'Registros con 100% de avance',icon:'book',tone:'blue'}}/><StatCard item={{label:'Áreas',value:data.report.areas.length,helper:'En esta empresa',icon:'layers',tone:'amber'}}/></section><article className="panel report-card"><div><span className="report-icon"><Icon name="report" size={28}/></span><h2>Reporte por área</h2><p>Incluye usuarios, usuarios activos, avance promedio registrado y módulos completados.</p></div><button className="btn btn-primary" onClick={onExport}>Exportar CSV</button></article><article className="panel admin-report-areas"><div className="panel-head"><div><span className="eyebrow">DESGLOSE</span><h2>Indicadores por área</h2></div></div><div className="table-wrap"><table><thead><tr><th>Área</th><th>Usuarios</th><th>Activos</th><th>Avance registrado</th><th>Módulos completados</th></tr></thead><tbody>{data.report.areas.map((area) => <tr key={area.id}><td><strong>{area.name}</strong></td><td>{area.users}</td><td>{area.active_users}</td><td>{area.average_progress == null ? 'Sin registros' : `${area.average_progress}%`}</td><td>{area.completed_modules}</td></tr>)}</tbody></table></div></article><p className="admin-hint">El avance promedio considera únicamente módulos con progreso registrado; no representa el cumplimiento de todas las asignaciones.</p></GenericPage>;
 }
 
-function GenericPage({ eyebrow, title, description, children }) {
-  return <><section className="simple-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></section>{children}</>;
-}
-
 function Modal({ title, onClose, children }) {
   useEffect(() => { const onKey = (e) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [onClose]);
   return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="modal-head"><div><span className="eyebrow">INKASEC</span><h2>{title}</h2></div><button type="button" className="round-button" onClick={onClose}>×</button></div>{children}</div></div>;
@@ -824,17 +769,6 @@ function Modal({ title, onClose, children }) {
 const blankQuestion = () => ({ prompt: '', options: ['', ''], correct: 0, feedback: '' });
 const DEFAULT_OPPORTUNITY = '¿Qué te dificulta aplicar esto en tu trabajo?';
 const DEFAULT_MOTIVATION = '¿Por qué te importa este tema para tu trabajo?';
-
-function OptionsEditor({ name, options, correct, onText, onCorrect, onAdd, onRemove }) {
-  return <div className="option-editor">
-    {options.map((option, index) => <div className="option-row" key={index}>
-      <label className="option-pick"><input type="radio" name={name} checked={correct === index} onChange={() => onCorrect(index)}/><span>Correcta</span></label>
-      <input value={option} placeholder={`Opción ${index + 1}`} maxLength={200} aria-label={`Opción ${index + 1}`} onChange={(e) => onText(index, e.target.value)}/>
-      {options.length > 2 && <button type="button" className="text-button danger-text" onClick={() => onRemove(index)}>Quitar</button>}
-    </div>)}
-    {options.length < 4 && <button type="button" className="text-button" onClick={onAdd}>+ Agregar opción</button>}
-  </div>;
-}
 
 function ModuleEditor({ initial, topics, onDone, onClose }) {
   const [form, setForm] = useState(() => initial
@@ -896,49 +830,6 @@ function ModuleEditor({ initial, topics, onDone, onClose }) {
     <label>Acción real que debe practicar<textarea rows={2} maxLength={500} required value={form.real_action} onChange={(e) => set('real_action', e.target.value)}/></label>
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar módulo'}</button></div>
-  </form>;
-}
-
-function ChallengeEditor({ initial, topics, onDone, onClose }) {
-  const [form, setForm] = useState(() => initial || { title: '', topic: topics[0] || '', scenario: '', options: ['', ''], correct_index: 0, feedback: '', status: 'draft' });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const topicOptions = form.topic && !topics.includes(form.topic) ? [form.topic, ...topics] : topics;
-  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-  function removeOption(oIndex) {
-    setForm((prev) => ({ ...prev, options: prev.options.filter((_, j) => j !== oIndex),
-      correct_index: prev.correct_index === oIndex ? 0 : prev.correct_index > oIndex ? prev.correct_index - 1 : prev.correct_index }));
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true); setError('');
-    const payload = { title: form.title.trim(), topic: form.topic, scenario: form.scenario.trim(), options: form.options.map((o) => o.trim()),
-      correct_index: form.correct_index, feedback: form.feedback.trim(), status: form.status };
-    try {
-      if (initial) await api.manager.updateChallenge(initial.id, payload);
-      else await api.manager.createChallenge(payload);
-      onDone();
-    } catch (err) { setError(err.message || 'No se pudo guardar el reto.'); }
-    finally { setBusy(false); }
-  }
-
-  return <form className="modal-form manager-editor" onSubmit={submit}>
-    <label>Título<input value={form.title} maxLength={180} required onChange={(e) => set('title', e.target.value)}/></label>
-    <div className="form-grid">
-      <label>Tema<select value={form.topic} onChange={(e) => set('topic', e.target.value)}>{topicOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
-      <label>Estado<select value={form.status} onChange={(e) => set('status', e.target.value)}>{STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
-    </div>
-    <label>Escenario<textarea rows={3} maxLength={1000} required value={form.scenario} onChange={(e) => set('scenario', e.target.value)}/></label>
-    <h3 className="editor-heading">Opciones de respuesta</h3>
-    <OptionsEditor name="correct-challenge" options={form.options} correct={form.correct_index}
-      onText={(o, value) => set('options', form.options.map((x, j) => (j === o ? value : x)))}
-      onCorrect={(c) => set('correct_index', c)}
-      onAdd={() => set('options', [...form.options, ''])}
-      onRemove={removeOption}/>
-    <label>Retroalimentación al responder<textarea rows={2} maxLength={300} value={form.feedback} onChange={(e) => set('feedback', e.target.value)}/></label>
-    {error && <div className="form-error" role="alert">{error}</div>}
-    <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar reto'}</button></div>
   </form>;
 }
 
@@ -1051,6 +942,7 @@ function AuthenticatedApp() {
   const [auditPage, setAuditPage] = useState(0);
   const [auditQuery, setAuditQuery] = useState('');
   const [managerEditor, setManagerEditor] = useState(null);
+  const [openModule, setOpenModule] = useState(null); // { id, from }: módulo abierto por el trabajador
   const managerView = MANAGER_VIEWS.includes(view) ? view : 'inicio';
   const activeView = user?.role === 'admin' ? view : user?.role === 'manager' ? managerView : 'inicio';
   const navView = user?.role === 'worker' ? view : activeView;
@@ -1098,8 +990,20 @@ function AuthenticatedApp() {
       if (window.location.pathname !== path) window.history.pushState(null, '', path);
     }
     setView(nextView);
+    setOpenModule(null);   // un clic en la barra siempre cierra el módulo abierto
     setError('');
     setNotice(null);
+  }
+
+  function openWorkerModule(id) {
+    setOpenModule({ id, from: view });
+    setView('modulos');
+  }
+
+  function closeWorkerModule() {
+    const from = openModule?.from || 'modulos';
+    setOpenModule(null);
+    setView(from);
   }
 
   if (loading) return <LoadingScreen/>;
@@ -1123,9 +1027,14 @@ function AuthenticatedApp() {
     } catch (err) { setNotice({ type: 'error', message: err.message || 'No se pudo exportar el CSV.' }); }
   }
 
-  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)}/>;
+  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={openModule ? `module-${openModule.id}` : view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)} openModule={openModule} onOpenModule={openWorkerModule} onCloseModule={closeWorkerModule}/>;
 
   return <InkaSecLayout activeView={navView} onViewChange={navigate} notifications={data?.notifications || []}><div className="inka-page-shell"><ErrorBoundary key={activeView}>{content}</ErrorBoundary></div>{managerEditor && <ManagerEditorModal kind={managerEditor.kind} id={managerEditor.id} topics={data?.topics || []} onClose={() => setManagerEditor(null)} onSaved={() => setReloadKey((value) => value + 1)}/>} {modal === 'user' && <AdminCreateUserModal onClose={() => setModal(null)} areas={data?.areas || []} onCreated={() => refreshAdmin('Usuario creado correctamente.')}/>} {modal === 'area' && <AdminCreateAreaModal onClose={() => setModal(null)} onCreated={() => refreshAdmin('Área creada correctamente.')}/>} {modal?.type === 'edit' && <AdminEditUserModal user={modal.user} currentUserId={user.id} onClose={() => setModal(null)} onSaved={() => refreshAdmin('Acceso actualizado correctamente.')}/>} {modal?.type === 'delete' && <AdminDeleteUserModal user={modal.user} onClose={() => setModal(null)} onDeleted={() => refreshAdmin('Usuario eliminado correctamente.')}/>}</InkaSecLayout>;
 }
 
-export default function App() { return <AuthProvider><AuthenticatedApp/></AuthProvider>; }
+export default function App() {
+  // La verificación de certificados es pública: no pide iniciar sesión.
+  const verify = window.location.pathname.match(/^\/verificar\/?([A-Za-z0-9-]*)\/?$/);
+  if (verify) return <VerifyCertificatePage code={verify[1]}/>;
+  return <AuthProvider><AuthenticatedApp/></AuthProvider>;
+}

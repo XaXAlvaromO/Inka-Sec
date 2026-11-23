@@ -116,11 +116,18 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 class Certificate(Base):
-    __tablename__ = "certificates"
+    """Certificado por tema (RF-07). Vale 12 meses; al renovarse, el anterior queda como reemplazado."""
+    __tablename__ = "topic_certificates"
     id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    code: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    topic: Mapped[str] = mapped_column(String(100), index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    module_titles: Mapped[list] = mapped_column(JSON, default=list)  # módulos que lo componían al emitirse
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    renewed: Mapped[bool] = mapped_column(Boolean, default=False)  # emitido por renovación
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

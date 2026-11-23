@@ -18,7 +18,7 @@ concurrency:
 jobs:
 
   backend:
-    name: Backend - Tests + SAST
+    name: Backend - Tests + Cobertura + SAST
     runs-on: ubuntu-latest
 
     defaults:
@@ -38,15 +38,23 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       # tests/conftest.py fija su propia configuración (SQLite en memoria y un secreto de prueba).
-      - name: Ejecutar pruebas
-        run: python -m pytest -q
+      - name: Ejecutar pruebas con cobertura
+        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=85
 
       - name: SAST con Bandit
         run: bandit -r app -ll -ii
 
+      - name: Guardar el reporte de cobertura del backend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: mi-api-fastapi/htmlcov/
+          retention-days: 14
+
 
   frontend:
-    name: Frontend - Lint + Build + Audit
+    name: Frontend - Lint + Tests + Cobertura + Build + Audit
     runs-on: ubuntu-latest
 
     defaults:
@@ -67,6 +75,18 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Vitest + Testing Library; falla si la cobertura baja de los mínimos de vite.config.js.
+      - name: Pruebas con cobertura
+        run: npm run test:coverage
+
+      - name: Guardar el reporte de cobertura del frontend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-frontend
+          path: frontend/coverage/
+          retention-days: 14
 
       - name: Build
         run: npm run build

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.session import Base, engine
+from app.db.migrate import ensure_columns
 from app import models  # noqa: F401
 from app.seed import seed_demo
 from app.core.middleware import SecurityHeadersMiddleware, AuthRateLimitMiddleware, CSRFMiddleware
@@ -12,6 +13,7 @@ from app.core.middleware import SecurityHeadersMiddleware, AuthRateLimitMiddlewa
 async def lifespan(app: FastAPI):
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
+        ensure_columns(engine)
     if settings.seed_demo_data:
         seed_demo()
     yield
@@ -24,7 +26,7 @@ app=FastAPI(title=settings.app_name,version="1.0.0",lifespan=lifespan,docs_url="
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(AuthRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST","PATCH","DELETE","OPTIONS"],allow_headers=["Content-Type","X-CSRF-Token"])
+app.add_middleware(CORSMiddleware,allow_origins=[settings.frontend_origin],allow_credentials=True,allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"],allow_headers=["Content-Type","X-CSRF-Token"])
 app.include_router(api_router,prefix=settings.api_prefix)
 @app.get("/")
 def root(): return {"status":"ok","app":settings.app_name,"variant":settings.arch_variant,"docs":"/docs" if show_docs else None}

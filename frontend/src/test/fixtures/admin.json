@@ -1,0 +1,348 @@
+{
+ "dashboard": {
+  "stats": [
+   {
+    "label": "Usuarios activos",
+    "value": "3",
+    "helper": "3 registrados",
+    "icon": "users",
+    "tone": "blue"
+   },
+   {
+    "label": "Cumplimiento global",
+    "value": "25%",
+    "helper": "Módulos aprobados",
+    "icon": "chart",
+    "tone": "green"
+   },
+   {
+    "label": "2FA en roles críticos",
+    "value": "100%",
+    "helper": "Gestores y administradores",
+    "icon": "lock",
+    "tone": "blue"
+   },
+   {
+    "label": "Eventos de auditoría",
+    "value": "8",
+    "helper": "Actividad reciente",
+    "icon": "audit",
+    "tone": "amber"
+   }
+  ],
+  "users": [
+   {
+    "id": 1,
+    "name": "María López",
+    "email": "trabajador@inkasec.pe",
+    "area": "Finanzas",
+    "role": "Trabajador",
+    "status": "Activo",
+    "twoFactor": false,
+    "progress": 25
+   },
+   {
+    "id": 2,
+    "name": "Lucía Torres",
+    "email": "gestor@inkasec.pe",
+    "area": "RR. HH.",
+    "role": "Gestor",
+    "status": "Activo",
+    "twoFactor": true,
+    "progress": 0
+   },
+   {
+    "id": 3,
+    "name": "Diego Vargas",
+    "email": "admin@inkasec.pe",
+    "area": "Tecnología",
+    "role": "Administrador",
+    "status": "Activo",
+    "twoFactor": true,
+    "progress": 0
+   }
+  ],
+  "audit": [
+   {
+    "id": 10,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:35:15.498113"
+   },
+   {
+    "id": 9,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:35:15.020693"
+   },
+   {
+    "id": 8,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:21:47.650575"
+   },
+   {
+    "id": 7,
+    "type": "success",
+    "action": "MODULE_UPDATED",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:14:26.753382"
+   },
+   {
+    "id": 6,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:14:25.613075"
+   },
+   {
+    "id": 5,
+    "type": "success",
+    "action": "MODULE_CREATED",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:13:31.492700"
+   },
+   {
+    "id": 4,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T22:13:31.477556"
+   },
+   {
+    "id": 3,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "detail": "IP 127.0.0.1",
+    "time": "2026-11-22T21:58:50.631313"
+   }
+  ],
+  "areas": [
+   {
+    "name": "Finanzas",
+    "compliance": 25,
+    "users": 1
+   },
+   {
+    "name": "Logística",
+    "compliance": 0,
+    "users": 0
+   },
+   {
+    "name": "RR. HH.",
+    "compliance": 0,
+    "users": 1
+   },
+   {
+    "name": "Tecnología",
+    "compliance": 0,
+    "users": 1
+   },
+   {
+    "name": "Ventas",
+    "compliance": 0,
+    "users": 0
+   }
+  ],
+  "notifications": []
+ },
+ "users": [
+  {
+   "id": 1,
+   "name": "María López",
+   "email": "trabajador@inkasec.pe",
+   "area": "Finanzas",
+   "role": "Trabajador",
+   "status": "Activo",
+   "twoFactor": false
+  },
+  {
+   "id": 2,
+   "name": "Lucía Torres",
+   "email": "gestor@inkasec.pe",
+   "area": "RR. HH.",
+   "role": "Gestor",
+   "status": "Activo",
+   "twoFactor": true
+  },
+  {
+   "id": 3,
+   "name": "Diego Vargas",
+   "email": "admin@inkasec.pe",
+   "area": "Tecnología",
+   "role": "Administrador",
+   "status": "Activo",
+   "twoFactor": true
+  }
+ ],
+ "areas": [
+  {
+   "id": 1,
+   "name": "Finanzas",
+   "users": 1,
+   "managers": 0
+  },
+  {
+   "id": 5,
+   "name": "Logística",
+   "users": 0,
+   "managers": 0
+  },
+  {
+   "id": 3,
+   "name": "RR. HH.",
+   "users": 1,
+   "managers": 1
+  },
+  {
+   "id": 2,
+   "name": "Tecnología",
+   "users": 1,
+   "managers": 0
+  },
+  {
+   "id": 4,
+   "name": "Ventas",
+   "users": 0,
+   "managers": 0
+  }
+ ],
+ "audit": {
+  "items": [
+   {
+    "id": 10,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "actor": "Diego Vargas",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:35:15.498113"
+   },
+   {
+    "id": 9,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "actor": "Lucía Torres",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:35:15.020693"
+   },
+   {
+    "id": 8,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "actor": "María López",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:21:47.650575"
+   },
+   {
+    "id": 7,
+    "type": "success",
+    "action": "MODULE_UPDATED",
+    "actor": "Lucía Torres",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:14:26.753382"
+   },
+   {
+    "id": 6,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "actor": "Lucía Torres",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:14:25.613075"
+   },
+   {
+    "id": 5,
+    "type": "success",
+    "action": "MODULE_CREATED",
+    "actor": "Lucía Torres",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:13:31.492700"
+   },
+   {
+    "id": 4,
+    "type": "success",
+    "action": "LOGIN_SUCCESS_MFA",
+    "actor": "Lucía Torres",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T22:13:31.477556"
+   },
+   {
+    "id": 3,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "actor": "María López",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T21:58:50.631313"
+   },
+   {
+    "id": 2,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "actor": "María López",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T21:58:35.625113"
+   },
+   {
+    "id": 1,
+    "type": "success",
+    "action": "LOGIN_SUCCESS",
+    "actor": "María López",
+    "ip": "127.0.0.1",
+    "time": "2026-11-22T21:46:13.003142"
+   }
+  ],
+  "total": 10,
+  "limit": 20,
+  "offset": 0
+ },
+ "report": {
+  "total_users": 3,
+  "active_users": 3,
+  "average_progress": 25,
+  "completed_modules": 2,
+  "areas": [
+   {
+    "id": 1,
+    "name": "Finanzas",
+    "users": 1,
+    "active_users": 1,
+    "average_progress": 25,
+    "completed_modules": 2
+   },
+   {
+    "id": 5,
+    "name": "Logística",
+    "users": 0,
+    "active_users": 0,
+    "average_progress": null,
+    "completed_modules": 0
+   },
+   {
+    "id": 3,
+    "name": "RR. HH.",
+    "users": 1,
+    "active_users": 1,
+    "average_progress": null,
+    "completed_modules": 0
+   },
+   {
+    "id": 2,
+    "name": "Tecnología",
+    "users": 1,
+    "active_users": 1,
+    "average_progress": null,
+    "completed_modules": 0
+   },
+   {
+    "id": 4,
+    "name": "Ventas",
+    "users": 0,
+    "active_users": 0,
+    "average_progress": null,
+    "completed_modules": 0
+   }
+  ]
+ }
+}

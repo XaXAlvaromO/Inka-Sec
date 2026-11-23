@@ -31,15 +31,22 @@ def test_cannot_complete_draft_or_foreign_module(world, client_for):
         assert complete(worker, module).status_code == 404
 
 
-def test_challenge_single_attempt_and_validation(world, client_for):
+def test_challenge_can_be_retried_and_keeps_the_first_attempt(world, client_for, db):
+    from app.models.challenge import ChallengeAttempt
     worker = client_for(world.w1)
     assert answer(worker, world.c1, 9).status_code == 422             # opción fuera de rango
     r = answer(worker, world.c1, 0)
     assert r.status_code == 200 and r.json()["is_correct"] is False and r.json()["correct_index"] == 1
-    assert answer(worker, world.c1, 1).status_code == 409             # un solo intento
+    r = answer(worker, world.c1, 1)                                   # el reto entrena: se puede repetir
+    assert r.status_code == 200 and r.json()["is_correct"] is True and r.json()["tries"] == 2
+    attempt = db.scalar(select(ChallengeAttempt).where(ChallengeAttempt.challenge_id == world.c1.id))
+    db.refresh(attempt)
+    assert attempt.is_correct is False and attempt.last_correct is True and attempt.tries == 2   # el primero no se pisa
     dash = worker.get(f"{API}/worker/dashboard").json()
     assert dash["challenge"]["id"] == world.c2.id
-    assert dash["stats"][1]["value"] == "0 / 2" and dash["stats"][1]["helper"] == "1 respondidos"
+    assert dash["stats"][1]["value"] == "1 / 2" and dash["stats"][1]["helper"] == "1 resueltos sin errores"
+    row = next(c for c in dash["challenges"] if c["id"] == world.c1.id)
+    assert row["is_correct"] is True and row["tries"] == 2            # el trabajador ve su práctica
     assert dash["weakTopics"] == [{"name": "Phishing", "icon": "shield", "errors": 1, "score": 0}]
 
 
@@ -56,8 +63,8 @@ def test_manager_dashboard_is_scoped_to_own_content(world, client_for):
     dash = client_for(world.mgr).get(f"{API}/manager/dashboard").json()
     success = {row["id"]: row["success"] for row in dash["content"]}
     assert success[world.mods[0].id] == 50                              # 1 de 2 trabajadores activos
-    assert dash["stats"][2]["value"] == "50%"                           # 1 acierto en 2 intentos
-    assert dash["topicErrors"][0]["topic"] == "Phishing" and dash["topicErrors"][0]["errors"] == 1
+    assert dash["stats"][2]["value"] == "--"                            # 1 persona: no se muestran aciertos
+    assert dash["topicErrors"] == []
 
 
 def test_admin_dashboard_and_reports(world, client_for):
@@ -103,7 +110,7 @@ def test_worker_saves_comb_diagnostic(world, client_for):
     payload = {"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 4}]}
     r = worker.post(f"{API}/worker/modules/{world.mods[0].id}/comb", json=payload, headers=csrf(worker))
     assert r.status_code == 200 and r.json() == {"saved": 1}
-    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "saved_reflections": {}}
+    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "reinforcement_days": [7, 30, 90], "saved_reflections": {}}
 
 
 # ------------------------------------------------- módulo y reto del trabajador

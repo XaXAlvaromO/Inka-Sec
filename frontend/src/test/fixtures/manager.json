@@ -1,0 +1,579 @@
+{
+ "dashboard": {
+  "stats": [
+   {
+    "label": "Contenidos publicados",
+    "value": "8",
+    "helper": "8 módulos y 4 retos en la empresa",
+    "icon": "book",
+    "tone": "blue"
+   },
+   {
+    "label": "Usuarios alcanzados",
+    "value": "3",
+    "helper": "Empresa actual",
+    "icon": "users",
+    "tone": "blue"
+   },
+   {
+    "label": "Tasa de aprobación",
+    "value": "--",
+    "helper": "Se muestra con 3 o más personas",
+    "icon": "check",
+    "tone": "green"
+   },
+   {
+    "label": "Borradores",
+    "value": "0",
+    "helper": "Tuyos, sin publicar",
+    "icon": "edit",
+    "tone": "amber"
+   }
+  ],
+  "content": [
+   {
+    "id": 8,
+    "kind": "module",
+    "title": "Bloquea tu computadora siempre",
+    "topic": "Dispositivos y USB",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 100,
+    "updated": "2026-11-22T22:14:26.747375",
+    "editable": true
+   },
+   {
+    "id": 7,
+    "kind": "module",
+    "title": "Archivos, adjuntos e información sensible",
+    "topic": "Protección de información",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.860310",
+    "editable": true
+   },
+   {
+    "id": 6,
+    "kind": "module",
+    "title": "Actualizaciones y bloqueo del dispositivo",
+    "topic": "Dispositivos",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.857672",
+    "editable": true
+   },
+   {
+    "id": 5,
+    "kind": "module",
+    "title": "Vishing e ingeniería social por llamadas",
+    "topic": "Ingeniería social",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.854912",
+    "editable": true
+   },
+   {
+    "id": 4,
+    "kind": "module",
+    "title": "Códigos de seguridad y verificación en dos pasos",
+    "topic": "2FA",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.851797",
+    "editable": true
+   },
+   {
+    "id": 3,
+    "kind": "module",
+    "title": "Uso seguro de redes Wi-Fi públicas",
+    "topic": "Conectividad",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.848920",
+    "editable": true
+   },
+   {
+    "id": 2,
+    "kind": "module",
+    "title": "Phishing y enlaces sospechosos",
+    "topic": "Phishing",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 100,
+    "updated": "2026-11-22T21:45:56.845019",
+    "editable": true
+   },
+   {
+    "id": 1,
+    "kind": "module",
+    "title": "Contraseñas seguras y únicas",
+    "topic": "Credenciales",
+    "type": "Módulo",
+    "status": "Publicado",
+    "users": 1,
+    "success": 0,
+    "updated": "2026-11-22T21:45:56.840852",
+    "editable": true
+   }
+  ],
+  "challenges": [
+   {
+    "id": 4,
+    "kind": "challenge",
+    "title": "Correo: 'Tu cuenta será suspendida hoy'",
+    "topic": "Phishing",
+    "type": "Reto",
+    "status": "Publicado",
+    "users": 1,
+    "success": null,
+    "updated": "2026-11-22T21:45:56.867358",
+    "editable": true
+   },
+   {
+    "id": 3,
+    "kind": "challenge",
+    "title": "Llamada de 'soporte' que pide acceso remoto",
+    "topic": "Ingeniería social",
+    "type": "Reto",
+    "status": "Publicado",
+    "users": 1,
+    "success": null,
+    "updated": "2026-11-22T21:45:56.867357",
+    "editable": true
+   },
+   {
+    "id": 2,
+    "kind": "challenge",
+    "title": "Mensaje de 'soporte' que pide tu contraseña",
+    "topic": "Contraseñas",
+    "type": "Reto",
+    "status": "Publicado",
+    "users": 1,
+    "success": null,
+    "updated": "2026-11-22T21:45:56.866292",
+    "editable": true
+   },
+   {
+    "id": 1,
+    "kind": "challenge",
+    "title": "Correo del 'gerente' pidiendo una transferencia urgente",
+    "topic": "Phishing",
+    "type": "Reto",
+    "status": "Publicado",
+    "users": 1,
+    "success": null,
+    "updated": "2026-11-22T21:45:56.866291",
+    "editable": true
+   }
+  ],
+  "topicErrors": [],
+  "areas": [
+   {
+    "id": 1,
+    "name": "Finanzas"
+   },
+   {
+    "id": 5,
+    "name": "Logística"
+   },
+   {
+    "id": 3,
+    "name": "RR. HH."
+   },
+   {
+    "id": 2,
+    "name": "Tecnología"
+   },
+   {
+    "id": 4,
+    "name": "Ventas"
+   }
+  ],
+  "workers": [
+   {
+    "id": 1,
+    "name": "María López",
+    "area": "Finanzas"
+   }
+  ],
+  "notifications": []
+ },
+ "topics": {
+  "topics": [
+   "Contraseñas",
+   "Phishing",
+   "Redes Wi-Fi públicas",
+   "Verificación en dos pasos",
+   "Ingeniería social",
+   "Dispositivos y USB",
+   "Información sensible",
+   "Actualizaciones",
+   "Navegación segura"
+  ]
+ },
+ "stats": {
+  "modules": [
+   {
+    "id": 8,
+    "title": "Bloquea tu computadora siempre",
+    "topic": "Dispositivos y USB",
+    "status": "published",
+    "audience": 1,
+    "completed": 1,
+    "completion_rate": 100,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": true,
+      "completed_at": "2026-11-22T22:21:51.243315"
+     }
+    ]
+   },
+   {
+    "id": 7,
+    "title": "Archivos, adjuntos e información sensible",
+    "topic": "Protección de información",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   },
+   {
+    "id": 6,
+    "title": "Actualizaciones y bloqueo del dispositivo",
+    "topic": "Dispositivos",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   },
+   {
+    "id": 5,
+    "title": "Vishing e ingeniería social por llamadas",
+    "topic": "Ingeniería social",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   },
+   {
+    "id": 4,
+    "title": "Códigos de seguridad y verificación en dos pasos",
+    "topic": "2FA",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   },
+   {
+    "id": 3,
+    "title": "Uso seguro de redes Wi-Fi públicas",
+    "topic": "Conectividad",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   },
+   {
+    "id": 2,
+    "title": "Phishing y enlaces sospechosos",
+    "topic": "Phishing",
+    "status": "published",
+    "audience": 1,
+    "completed": 1,
+    "completion_rate": 100,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": true,
+      "completed_at": "2026-11-22T21:59:01.194648"
+     }
+    ]
+   },
+   {
+    "id": 1,
+    "title": "Contraseñas seguras y únicas",
+    "topic": "Credenciales",
+    "status": "published",
+    "audience": 1,
+    "completed": 0,
+    "completion_rate": 0,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "completed": false,
+      "completed_at": null
+     }
+    ]
+   }
+  ],
+  "challenges": [
+   {
+    "id": 4,
+    "title": "Correo: 'Tu cuenta será suspendida hoy'",
+    "topic": "Phishing",
+    "status": "published",
+    "kind": "signals",
+    "audience": 1,
+    "attempts": 1,
+    "correct": null,
+    "success_rate": null,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "answered": true,
+      "tries": 1
+     }
+    ]
+   },
+   {
+    "id": 3,
+    "title": "Llamada de 'soporte' que pide acceso remoto",
+    "topic": "Ingeniería social",
+    "status": "published",
+    "kind": "steps",
+    "audience": 1,
+    "attempts": 1,
+    "correct": null,
+    "success_rate": null,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "answered": true,
+      "tries": 1
+     }
+    ]
+   },
+   {
+    "id": 2,
+    "title": "Mensaje de 'soporte' que pide tu contraseña",
+    "topic": "Contraseñas",
+    "status": "published",
+    "kind": "quick",
+    "audience": 1,
+    "attempts": 0,
+    "correct": null,
+    "success_rate": null,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "answered": false,
+      "tries": 0
+     }
+    ]
+   },
+   {
+    "id": 1,
+    "title": "Correo del 'gerente' pidiendo una transferencia urgente",
+    "topic": "Phishing",
+    "status": "published",
+    "kind": "quick",
+    "audience": 1,
+    "attempts": 0,
+    "correct": null,
+    "success_rate": null,
+    "workers": [
+     {
+      "user_id": 1,
+      "name": "María López",
+      "area": "Finanzas",
+      "answered": false,
+      "tries": 0
+     }
+    ]
+   }
+  ],
+  "min_group": 3,
+  "certificates": [
+   {
+    "topic": "Dispositivos y USB",
+    "active": 1,
+    "expiring": 0,
+    "expired": 0,
+    "workers": 1
+   },
+   {
+    "topic": "Phishing",
+    "active": 1,
+    "expiring": 0,
+    "expired": 0,
+    "workers": 1
+   }
+  ],
+  "workers": [
+   {
+    "user_id": 1,
+    "name": "María López",
+    "area": "Finanzas",
+    "certificates": 2
+   }
+  ],
+  "topic_errors": []
+ },
+ "assignable": [
+  {
+   "item_type": "module",
+   "item_id": 6,
+   "title": "Actualizaciones y bloqueo del dispositivo",
+   "topic": "Dispositivos"
+  },
+  {
+   "item_type": "module",
+   "item_id": 7,
+   "title": "Archivos, adjuntos e información sensible",
+   "topic": "Protección de información"
+  },
+  {
+   "item_type": "module",
+   "item_id": 8,
+   "title": "Bloquea tu computadora siempre",
+   "topic": "Dispositivos y USB"
+  },
+  {
+   "item_type": "module",
+   "item_id": 1,
+   "title": "Contraseñas seguras y únicas",
+   "topic": "Credenciales"
+  },
+  {
+   "item_type": "module",
+   "item_id": 4,
+   "title": "Códigos de seguridad y verificación en dos pasos",
+   "topic": "2FA"
+  },
+  {
+   "item_type": "module",
+   "item_id": 2,
+   "title": "Phishing y enlaces sospechosos",
+   "topic": "Phishing"
+  },
+  {
+   "item_type": "module",
+   "item_id": 3,
+   "title": "Uso seguro de redes Wi-Fi públicas",
+   "topic": "Conectividad"
+  },
+  {
+   "item_type": "module",
+   "item_id": 5,
+   "title": "Vishing e ingeniería social por llamadas",
+   "topic": "Ingeniería social"
+  },
+  {
+   "item_type": "challenge",
+   "item_id": 1,
+   "title": "Correo del 'gerente' pidiendo una transferencia urgente",
+   "topic": "Phishing"
+  },
+  {
+   "item_type": "challenge",
+   "item_id": 4,
+   "title": "Correo: 'Tu cuenta será suspendida hoy'",
+   "topic": "Phishing"
+  },
+  {
+   "item_type": "challenge",
+   "item_id": 3,
+   "title": "Llamada de 'soporte' que pide acceso remoto",
+   "topic": "Ingeniería social"
+  },
+  {
+   "item_type": "challenge",
+   "item_id": 2,
+   "title": "Mensaje de 'soporte' que pide tu contraseña",
+   "topic": "Contraseñas"
+  }
+ ],
+ "assignments": [],
+ "module": {
+  "id": 8,
+  "title": "Bloquea tu computadora siempre",
+  "topic": "Dispositivos y USB",
+  "objective": "Bloquear la computadora cada vez que te alejas de tu escritorio.",
+  "micro_lesson": "Si dejas tu computadora desbloqueada, cualquiera puede leer tu correo o enviar mensajes en tu nombre en segundos. Antes de levantarte, presiona Windows + L.",
+  "capacity_questions": [
+   {
+    "prompt": "¿Qué haces antes de ir a la reunión que está en otro piso?",
+    "options": [
+     "La dejo abierta, vuelvo rápido",
+     "Presiono Windows + L para bloquearla"
+    ],
+    "correct": 1,
+    "feedback": "Unos minutos bastan para que alguien use tu sesión."
+   }
+  ],
+  "opportunity_question": "¿Qué te dificulta aplicar esto en tu trabajo?",
+  "motivation_question": "¿Por qué te importa este tema para tu trabajo?",
+  "real_action": "Hoy, cada vez que te levantes de tu sitio, presiona Windows + L.",
+  "status": "published"
+ }
+}
