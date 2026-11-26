@@ -103,7 +103,7 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar Semgrep
-        run: python -m pip install semgrep==1.130.0
+        run: python -m pip install "setuptools<82" semgrep==1.130.0
 
       - name: SAST del frontend con Semgrep
         env:
