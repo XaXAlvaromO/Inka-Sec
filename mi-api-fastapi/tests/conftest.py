@@ -15,6 +15,7 @@ os.environ.update({
     "COOKIE_SECURE": "false",
     "COOKIE_SAMESITE": "lax",
     "TRUSTED_PROXY_HOPS": "0",
+    "EMAIL_BACKEND": "console",  # el .env local puede tener SMTP real: las pruebas nunca deben enviar correos
     "FRONTEND_ORIGIN": "http://localhost:5173",
 })
 
@@ -31,6 +32,9 @@ from app.core.middleware import auth_rate_limiter
 from app.core.security import hash_password
 from app.db.session import Base, get_db
 from app.services import auth_service
+from app.api.routes import admin as admin_routes
+from app.services import superadmin_service
+from app.core.constants import PLATFORM_COMPANY_NAME, PLATFORM_COMPANY_SLUG
 from app.models.challenge import Challenge
 from app.models.models import Area, Company, LearningModule, User
 
@@ -39,6 +43,8 @@ PASSWORD = "Clave-Segura-2026"
 
 # Correos 2FA "enviados" durante la prueba: (destinatario, código). Nunca sale nada a internet.
 OUTBOX: list[tuple[str, str]] = []
+# Correos de bienvenida (gestores/administradores nuevos): dicts con to, name, role_label, temporary_password.
+WELCOME_OUTBOX: list[dict] = []
 
 
 @pytest.fixture(autouse=True)
@@ -51,9 +57,13 @@ def _reset_rate_limiter():
 @pytest.fixture(autouse=True)
 def _capture_login_codes(monkeypatch):
     OUTBOX.clear()
+    WELCOME_OUTBOX.clear()
     monkeypatch.setattr(auth_service, "send_login_code", lambda to, code: OUTBOX.append((to, code)))
+    monkeypatch.setattr(admin_routes, "send_welcome_email", lambda to, **kw: WELCOME_OUTBOX.append({"to": to, **kw}))
+    monkeypatch.setattr(superadmin_service, "send_welcome_email", lambda to, **kw: WELCOME_OUTBOX.append({"to": to, **kw}))
     yield
     OUTBOX.clear()
+    WELCOME_OUTBOX.clear()
 
 
 def code_for(user) -> str:
@@ -116,10 +126,17 @@ def world(db, password_hash):
                       correct_index=1, feedback="fb", status="published", created_by=by)
         db.add(c); db.commit(); return c
 
-    w = SimpleNamespace(co=co, other=other, area=area)
+    # Empresa interna de la plataforma (no es una empresa cliente): aquí vive el superadministrador,
+    # igual que en una instalación real (app/bootstrap_admin.py crea la misma separación).
+    platform = Company(name=PLATFORM_COMPANY_NAME, slug=PLATFORM_COMPANY_SLUG)
+    db.add(platform); db.commit()
+
+    w = SimpleNamespace(co=co, other=other, platform=platform, area=area)
     w.w1, w.w2 = user("ana", "worker"), user("luis", "worker")
     w.mgr, w.adm = user("gestor", "manager"), user("admin", "admin")
     w.outsider = user("otro", "worker", company=other, user_area=other_area)
+    w.super = User(company_id=platform.id, area_id=None, name="superadmin", email="superadmin@x.pe", password_hash=password_hash, role="superadmin")
+    db.add(w.super); db.commit()
     w.mods = [module(f"m{i}", by=w.mgr.id) for i in range(4)]
     w.draft = module("borrador", status="draft", by=w.mgr.id)
     w.foreign = module("ajeno", company=other)

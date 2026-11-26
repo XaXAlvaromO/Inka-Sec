@@ -8,13 +8,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.dependencies import client_ip, require_roles
 from app.core.security import hash_password
-from app.models.models import User, Area, AuditLog
+from app.models.models import User, Area, AuditLog, Company
 from app.repositories.user_repository import get_by_email, list_by_company, normalize_email
 from app.services.admin_report_service import admin_report_summary
 from app.services.dashboard_service import admin_dashboard
 from app.services.audit_service import record_audit
-from app.schemas.user import UserCreate, UserUpdate, user_row
+from app.schemas.user import UserCreate, UserUpdate, user_row, ROLE_LABELS
+from app.services.email_service import EmailDeliveryError, send_welcome_email
+from app.services.starter_content import seed_starter_content_if_empty
 router=APIRouter(prefix="/admin",tags=["admin"])
+ROLES_WITH_WELCOME_EMAIL={"admin","manager"}
 AUDIT_ACTION_LABELS={"LOGIN_SUCCESS":"Inicio de sesión","LOGIN_SUCCESS_MFA":"Inicio de sesión con 2FA","LOGIN_FAILED":"Inicio de sesión fallido","MFA_FAILED":"Verificación 2FA fallida","USER_CREATED":"Usuario creado","USER_UPDATED":"Usuario actualizado","USER_DELETED":"Usuario eliminado","ROLE_CHANGED":"Rol actualizado","AREA_CREATED":"Área creada"}
 
 class AreaCreate(BaseModel):
@@ -48,8 +51,24 @@ def create_user(payload:UserCreate,request:Request,db:Session=Depends(get_db),ad
     role=payload.role
     temporary_password=secrets.token_urlsafe(15)
     u=User(company_id=admin.company_id,area_id=area.id,name=payload.name,email=email,password_hash=hash_password(temporary_password),role=role,is_active=True)
-    db.add(u); db.commit(); db.refresh(u); record_audit(db,action="USER_CREATED",result="success",user=admin,ip=client_ip(request),details={"target_user_id":u.id,"role":role})
-    return {**user_row(u),"temporary_password":temporary_password}
+    db.add(u); db.commit(); db.refresh(u)
+    # Gestores y administradores reciben en su correo el aviso y su contraseña inicial. Si el envío falla,
+    # la cuenta ya existe: no se revierte, y la respuesta lo indica para que el admin entregue los datos a mano.
+    email_sent=None
+    if role in ROLES_WITH_WELCOME_EMAIL:
+        try: send_welcome_email(email,name=u.name,role_label=ROLE_LABELS[role],temporary_password=temporary_password); email_sent=True
+        except EmailDeliveryError: email_sent=False
+    starter=None
+    if role=="manager":
+        # Primer gestor de una empresa sin contenido propio todavía: le dejamos módulos y
+        # retos de ejemplo ya publicados, para que no empiece de cero.
+        company=db.get(Company,admin.company_id)
+        starter=seed_starter_content_if_empty(db,company,u)
+    details={"target_user_id":u.id,"role":role}
+    if email_sent is not None: details["welcome_email_sent"]=email_sent
+    if starter and (starter["modules"] or starter["challenges"]): details["starter_content"]=starter
+    record_audit(db,action="USER_CREATED",result="success",user=admin,ip=client_ip(request),details=details)
+    return {**user_row(u),"temporary_password":temporary_password,"email_sent":bool(email_sent)}
 @router.patch("/users/{user_id}")
 def update_user(user_id:int,payload:UserUpdate,request:Request,db:Session=Depends(get_db),admin=Depends(require_roles("admin"))):
     u=company_user(db,user_id,admin)

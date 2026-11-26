@@ -81,6 +81,22 @@ describe('escenario por pasos', () => {
     expect(onDone).toHaveBeenCalled();
   });
 
+  it('permite volver a un paso anterior y recupera la decisión que había elegido', async () => {
+    api.worker.checkStep.mockResolvedValueOnce({ safe: false, safe_index: 1, feedback: 'Controlan tu equipo.', safe_feedback: 'Canal oficial.' });
+    play(STEPS);
+    expect(screen.queryByRole('button', { name: '← Paso anterior' })).not.toBeInTheDocument();   // no hay a dónde volver
+    await userEvent.click(screen.getByRole('radio', { name: /Sí/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar decisión' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente paso' }));
+
+    expect(screen.getByText('Paso 2 de 2')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '← Paso anterior' }));
+
+    expect(screen.getByText('Paso 1 de 2')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Sí/ })).toBeChecked();   // su decisión no se perdió
+    expect(screen.queryByText('Esta decisión es riesgosa')).not.toBeInTheDocument();   // puede cambiar de opinión
+  });
+
   it('felicita cuando todas las decisiones son seguras', async () => {
     api.worker.checkStep.mockResolvedValue({ safe: true, safe_index: 0, feedback: 'Bien.', safe_feedback: 'Bien.' });
     api.worker.answerChallenge.mockResolvedValueOnce({ is_correct: true, safe_steps: 2, total_steps: 2, feedback: 'Excelente.', tries: 1,

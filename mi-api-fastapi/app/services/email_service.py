@@ -1,4 +1,4 @@
-"""Envío de códigos de verificación por correo (segundo factor de gestores y administradores).
+"""Correos de InkaSec: código de verificación (2FA) y bienvenida a gestores y administradores nuevos.
 
 Tres proveedores, elegidos con EMAIL_BACKEND:
 - console: imprime el código en la terminal. Solo para desarrollo local (en producción se rechaza).
@@ -18,10 +18,11 @@ from app.core.config import settings
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 TIMEOUT_SECONDS = 15
 SUBJECT = "Tu código de acceso a InkaSec"
+WELCOME_SUBJECT = "Tu cuenta de InkaSec fue creada"
 
 
 class EmailDeliveryError(Exception):
-    """El código no pudo enviarse. Nunca incluye el código ni la contraseña en el mensaje."""
+    """El correo no pudo enviarse. Nunca incluye el código ni la contraseña en el mensaje."""
 
 
 def _body(code: str) -> str:
@@ -33,26 +34,51 @@ def _body(code: str) -> str:
     )
 
 
-def send_login_code(to: str, code: str) -> None:
+def _welcome_body(name: str, email: str, role_label: str, temporary_password: str, login_url: str) -> str:
+    return (
+        f"Hola {name},\n\n"
+        f"Un administrador creó tu cuenta de {role_label} en InkaSec.\n\n"
+        f"Ingresa en: {login_url}\n"
+        f"Correo: {email}\n"
+        f"Contraseña inicial: {temporary_password}\n\n"
+        "Cada vez que inicies sesión te enviaremos un código de 6 dígitos a este mismo correo "
+        "(verificación en dos pasos).\n\n"
+        "Si no esperabas este mensaje, ignóralo y avisa a tu administrador. "
+        "Nunca compartas tu contraseña ni tus códigos con nadie."
+    )
+
+
+def _deliver(to: str, subject: str, body: str) -> None:
     backend = settings.email_backend
     if backend == "console":
         if settings.is_production:
             raise EmailDeliveryError("El envío por consola está deshabilitado en producción")
-        print(f"[InkaSec · solo desarrollo] Código 2FA para {to}: {code}", flush=True)
+        # Solo desarrollo: el contenido (código o contraseña inicial) se imprime en la terminal de la API.
+        print(f"[InkaSec · solo desarrollo] {subject} -> {to}\n{body}", flush=True)
     elif backend == "smtp":
-        _send_smtp(to, code)
+        _send_smtp(to, subject, body)
     elif backend == "brevo":
-        _send_brevo(to, code)
+        _send_brevo(to, subject, body)
     else:  # pragma: no cover - el validador de configuración ya lo impide
         raise EmailDeliveryError("Proveedor de correo desconocido")
 
 
-def _send_smtp(to: str, code: str) -> None:
+def send_login_code(to: str, code: str) -> None:
+    _deliver(to, SUBJECT, _body(code))
+
+
+def send_welcome_email(to: str, *, name: str, role_label: str, temporary_password: str) -> None:
+    """Avisa a un gestor o administrador recién creado y le entrega su contraseña inicial."""
+    login_url = settings.frontend_origin.strip().rstrip("/")
+    _deliver(to, WELCOME_SUBJECT, _welcome_body(name, to, role_label, temporary_password, login_url))
+
+
+def _send_smtp(to: str, subject: str, body: str) -> None:
     message = EmailMessage()
-    message["Subject"] = SUBJECT
+    message["Subject"] = subject
     message["From"] = formataddr((settings.email_from_name, settings.email_from))
     message["To"] = to
-    message.set_content(_body(code))
+    message.set_content(body)
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=TIMEOUT_SECONDS) as server:
             server.starttls(context=ssl.create_default_context())
@@ -62,12 +88,12 @@ def _send_smtp(to: str, code: str) -> None:
         raise EmailDeliveryError("Fallo SMTP") from exc
 
 
-def _send_brevo(to: str, code: str) -> None:
+def _send_brevo(to: str, subject: str, body: str) -> None:
     payload = {
         "sender": {"name": settings.email_from_name, "email": settings.email_from},
         "to": [{"email": to}],
-        "subject": SUBJECT,
-        "textContent": _body(code),
+        "subject": subject,
+        "textContent": body,
     }
     headers = {"api-key": settings.brevo_api_key, "accept": "application/json"}
     try:

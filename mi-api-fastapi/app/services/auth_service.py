@@ -14,7 +14,7 @@ from app.repositories.user_repository import get_by_email, normalize_email
 LOCK_MINUTES = 15
 MAX_FAILED_ATTEMPTS = 3
 CHALLENGE_MINUTES = 5
-ROLES_WITH_2FA = {"admin", "manager"}
+ROLES_WITH_2FA = {"admin", "manager", "superadmin"}
 
 def _normalize_dt(value):
     if value is None: return None

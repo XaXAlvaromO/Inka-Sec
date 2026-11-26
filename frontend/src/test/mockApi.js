@@ -25,6 +25,9 @@ export function createApiMock() {
         dashboard: vi.fn(), users: vi.fn(), areas: vi.fn(), createArea: vi.fn(), audit: vi.fn(), reportSummary: vi.fn(),
         createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), exportReport: vi.fn(),
       },
+      superadmin: {
+        companies: vi.fn(), createCompany: vi.fn(), companyUsers: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(),
+      },
     },
   };
 }

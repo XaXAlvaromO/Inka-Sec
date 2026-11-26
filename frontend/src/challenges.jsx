@@ -89,6 +89,16 @@ function StepsPlayer({ challenge, onRetry, onDone }) {
     finally { setBusy(false); }
   }
 
+  // Volver un paso recupera la decisión que ya habías tomado ahí, por si quieres cambiarla.
+  function stepBack() {
+    if (index === 0) return;
+    setError('');
+    setPick(choices[index - 1]);
+    setChoices(choices.slice(0, -1));
+    setIndex(index - 1);
+    setCheck(null);
+  }
+
   if (result) {
     return <>
       <ResultBanner good={result.is_correct}
@@ -108,7 +118,10 @@ function StepsPlayer({ challenge, onRetry, onDone }) {
 
   return <>
     {index === 0 && <div className="scenario-box"><Icon name="target" size={20}/><p>{challenge.description}</p></div>}
-    <p className="step-counter">Paso {index + 1} de {steps.length}</p>
+    <div className="lesson-top-actions">
+      <p className="step-counter">Paso {index + 1} de {steps.length}</p>
+      {index > 0 && <button className="text-button" onClick={stepBack}>← Paso anterior</button>}
+    </div>
     <h2 className="step-prompt">{step.prompt}</h2>
     <div className="choice-list" role="radiogroup" aria-label={`Opciones del paso ${index + 1}`}>
       {step.options.map((option, i) => {

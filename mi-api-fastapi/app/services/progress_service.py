@@ -12,7 +12,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.models.models import User, ModuleProgress, Reflection, utcnow
+from app.models.models import User, ModuleProgress, Reflection, CombResponse, utcnow
 from app.models.challenge import Challenge, ChallengeAttempt
 from app.repositories import progress_repository as repo
 from app.repositories import module_repository
@@ -236,3 +236,30 @@ def save_reflections(db: Session, user: User, module_id: int, responses: list[di
 def saved_reflections(db: Session, user: User, module_id: int) -> dict[str, str]:
     rows = db.scalars(select(Reflection).where(Reflection.user_id == user.id, Reflection.module_id == module_id)).all()
     return {r.prompt_code: r.text for r in rows}
+
+
+def saved_diagnostic(db: Session, user: User, module_id: int, phase: str = "pre") -> dict[str, int]:
+    rows = db.scalars(select(CombResponse).where(
+        CombResponse.user_id == user.id, CombResponse.module_id == module_id, CombResponse.phase == phase)).all()
+    return {r.prompt_code: r.value for r in rows}
+
+
+def resume_step(db: Session, user: User, module_id: int) -> int:
+    """En qué paso debe retomar el trabajador un módulo que ya empezó (0 si es la primera vez).
+
+    Se calcula a partir de lo que ya quedó guardado, no de un contador aparte: así nunca se
+    desincroniza de lo que el trabajador realmente hizo.
+    """
+    p = db.scalar(select(ModuleProgress).where(ModuleProgress.user_id == user.id, ModuleProgress.module_id == module_id))
+    if p and p.completed_at is not None:
+        return 6
+    reflections = saved_reflections(db, user, module_id)
+    if reflections.get("motivacion"):
+        return 5
+    if reflections.get("oportunidad"):
+        return 4
+    if p and p.score is not None:
+        return 3
+    if saved_diagnostic(db, user, module_id):
+        return 1
+    return 0

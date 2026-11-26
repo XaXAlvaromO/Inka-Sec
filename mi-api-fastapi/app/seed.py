@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.constants import PLATFORM_COMPANY_NAME, PLATFORM_COMPANY_SLUG
 from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
+from app.services.starter_content import ensure_starter_modules
 from app.demo_challenges import ensure_demo_challenges
-from app.models.models import Area, Company, LearningModule, ModuleProgress, Notification, User
+from app.models.models import Area, Company, Notification, User
 
 
 def seed_demo():
@@ -69,31 +69,32 @@ def seed_demo():
                 db.refresh(user)
             users[role] = user
 
-        path = Path(__file__).parent / "data" / "modules_com_b.json"
-        for payload in json.loads(path.read_text(encoding="utf-8")):
-            module = db.scalar(
-                select(LearningModule).where(
-                    LearningModule.company_id == company.id,
-                    LearningModule.slug == payload["slug"],
+        # Cuenta de superadministrador, en su propia empresa interna (no "InkaSec Demo"): así
+        # el panel de superadministrador tiene, desde el primer arranque, al menos una empresa
+        # cliente real que gestionar, separada de la plataforma como en producción.
+        platform = db.scalar(select(Company).where(Company.slug == PLATFORM_COMPANY_SLUG))
+        if not platform:
+            platform = Company(name=PLATFORM_COMPANY_NAME, slug=PLATFORM_COMPANY_SLUG)
+            db.add(platform)
+            db.commit()
+            db.refresh(platform)
+        if not db.scalar(select(User).where(User.email == "superadmin@inkasec.pe")):
+            db.add(
+                User(
+                    company_id=platform.id,
+                    area_id=None,
+                    name="Admin Plataforma",
+                    email="superadmin@inkasec.pe",
+                    password_hash=hash_password(settings.demo_password),
+                    role="superadmin",
+                    is_active=True,
                 )
             )
-            if not module:
-                module = LearningModule(
-                    company_id=company.id,
-                    slug=payload["slug"],
-                    title=payload["title"],
-                    topic=payload["topic"],
-                    behavior_objective=payload["behavior_objective"],
-                    status="published",
-                    content_json=payload,
-                    created_by=users["manager"].id,
-                )
-                db.add(module)
-                db.commit()
-                db.refresh(module)
-                db.add(ModuleProgress(user_id=users["worker"].id, module_id=module.id, progress=0))
+            db.commit()
 
-        # Dos retos publicados para que el trabajador tenga algo que responder desde el primer inicio.
+        # Los mismos módulos COM-B de ejemplo y retos de demostración que recibe, de forma
+        # automática, el primer gestor de cualquier empresa nueva (ver app/services/starter_content.py).
+        ensure_starter_modules(db, company, users["manager"])
         ensure_demo_challenges(db, company, users["manager"])
 
         if not db.scalar(select(Notification).where(Notification.user_id == users["worker"].id)):
@@ -111,6 +112,7 @@ def seed_demo():
         print("worker: trabajador@inkasec.pe")
         print("manager: gestor@inkasec.pe")
         print("admin: admin@inkasec.pe")
+        print("superadmin: superadmin@inkasec.pe")
         print("La contraseña es la configurada en DEMO_PASSWORD; no se imprime en logs.")
         print("Gestor y administrador piden código 2FA por correo: con EMAIL_BACKEND=console aparece en esta terminal.")
     finally:
