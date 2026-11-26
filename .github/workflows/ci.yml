@@ -6,17 +6,14 @@ on:
   push:
     branches: [main]
 
-# Mínimo privilegio: el token de GitHub de estos jobs solo puede leer el código.
 permissions:
   contents: read
 
-# Nunca dos despliegues a la vez sobre la misma rama.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-
   backend:
     name: Backend - Tests + Cobertura + SAST
     runs-on: ubuntu-latest
@@ -37,12 +34,20 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements-dev.txt
 
-      # tests/conftest.py fija su propia configuración (SQLite en memoria y un secreto de prueba).
+      # tests/conftest.py configura SQLite en memoria y un secreto de prueba.
       - name: Ejecutar pruebas con cobertura
         run: python -m pytest -q --cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=85
 
       - name: SAST con Bandit
-        run: bandit -r app -ll -ii
+        run: bandit -r app -ll -i -f json -o bandit-report.json
+
+      - name: Guardar el reporte de Bandit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-bandit
+          path: mi-api-fastapi/bandit-report.json
+          retention-days: 14
 
       - name: Guardar el reporte de cobertura del backend
         if: always()
@@ -52,9 +57,8 @@ jobs:
           path: mi-api-fastapi/htmlcov/
           retention-days: 14
 
-
   frontend:
-    name: Frontend - Lint + Tests + Cobertura + Build + Audit
+    name: Frontend - Lint + Tests + Cobertura + Build + Audit + SAST
     runs-on: ubuntu-latest
 
     defaults:
@@ -76,7 +80,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # Vitest + Testing Library; falla si la cobertura baja de los mínimos de vite.config.js.
       - name: Pruebas con cobertura
         run: npm run test:coverage
 
@@ -94,6 +97,30 @@ jobs:
       - name: Auditar dependencias de producción
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Configurar Python para Semgrep
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Semgrep
+        run: python -m pip install "setuptools<82" semgrep==1.130.0
+
+      - name: SAST del frontend con Semgrep
+        env:
+          SEMGREP_SEND_METRICS: 'off'
+        run: |
+          semgrep scan --config p/javascript --config p/typescript --error \
+            --severity ERROR \
+            --exclude node_modules --exclude dist --exclude coverage \
+            --json --output semgrep-report.json .
+
+      - name: Guardar el reporte de Semgrep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-semgrep
+          path: frontend/semgrep-report.json
+          retention-days: 14
 
   deploy-dev:
     name: Deploy a Desarrollo
@@ -102,7 +129,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-      # Los secretos van por variables de entorno, no interpolados dentro del script.
       - name: Desplegar backend y frontend de desarrollo en Render
         env:
           BACKEND_HOOK: ${{ secrets.RENDER_DEV_BACKEND_HOOK }}
@@ -118,7 +144,6 @@ jobs:
             echo "::error::Render no aceptó el deploy del frontend de desarrollo"
             exit 1
           }
-
 
   smoke-test:
     name: Smoke Test en Dev
@@ -143,10 +168,56 @@ jobs:
           echo "::error::La ruta de salud de desarrollo no devolvió el JSON esperado"
           exit 1
 
+  dast:
+    name: DAST pasivo con OWASP ZAP en Dev
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Ejecutar ZAP Baseline
+        env:
+          DEV_FRONTEND_URL: ${{ vars.RENDER_DEV_FRONTEND_URL }}
+        run: |
+          : "${DEV_FRONTEND_URL:?Falta la variable RENDER_DEV_FRONTEND_URL}"
+          mkdir -p zap-report
+          chmod 0777 zap-report
+
+          status=0
+          docker run --rm --mount "type=bind,source=$PWD/zap-report,target=/zap/wrk" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t "${DEV_FRONTEND_URL%/}/" -m 1 -T 5 \
+            -r zap.html -J zap.json || status=$?
+
+          # ZAP devuelve 2 cuando hay advertencias. El JSON determina el riesgo.
+          case "$status" in
+            0|2) ;;
+            *) exit "$status" ;;
+          esac
+
+          jq -e '(.site | type == "array" and length > 0)' zap-report/zap.json > /dev/null
+          if jq -e '[.site[].alerts[]? | select((.riskcode | tostring) == "3" and ((.confidence | tostring) == "2" or (.confidence | tostring) == "3"))] | length > 0' \
+            zap-report/zap.json > /dev/null; then
+            echo "::error::ZAP detectó alertas de riesgo alto (confianza media/alta) en desarrollo"
+            exit 1
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              exit "$status"
+            fi
+          fi
+
+      - name: Guardar los reportes de ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-zap
+          path: zap-report/
+          retention-days: 14
 
   deploy-prod:
     name: Deploy a Producción
-    needs: smoke-test
+    needs: dast
     runs-on: ubuntu-latest
     if: vars.RENDER_PROD_ENABLED == 'true'
 
