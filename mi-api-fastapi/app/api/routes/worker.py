@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.dependencies import require_roles
@@ -23,7 +24,10 @@ def dashboard(db:Session=Depends(get_db), user=Depends(require_roles("worker")))
 @router.get("/modules/{module_id}")
 def module_detail(module_id:int,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
     module=_published_module(db,module_id,user)
-    return {**progress_service.worker_module_view(module.content_json),"saved_reflections":progress_service.saved_reflections(db,user,module_id)}
+    return {**progress_service.worker_module_view(module.content_json),
+            "saved_reflections":progress_service.saved_reflections(db,user,module_id),
+            "saved_diagnostic":progress_service.saved_diagnostic(db,user,module_id),
+            "resume_step":progress_service.resume_step(db,user,module_id)}
 @router.post("/modules/{module_id}/capacity")
 def grade_capacity(module_id:int,payload:CapacityPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
     try: return progress_service.grade_capacity(db,user,module_id,[a.model_dump() for a in payload.answers])
@@ -38,7 +42,10 @@ def save_reflections(module_id:int,payload:ReflectionPayload,db:Session=Depends(
 def save_comb(module_id:int,payload:CombPayload,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):
     _published_module(db,module_id,user)
     for r in payload.responses:
-        db.add(CombResponse(user_id=user.id,module_id=module_id,phase=payload.phase,dimension=r.dimension,prompt_code=r.code,value=r.value))
+        row=db.scalar(select(CombResponse).where(CombResponse.user_id==user.id,CombResponse.module_id==module_id,
+            CombResponse.phase==payload.phase,CombResponse.prompt_code==r.code))
+        if row: row.value=r.value; row.dimension=r.dimension
+        else: db.add(CombResponse(user_id=user.id,module_id=module_id,phase=payload.phase,dimension=r.dimension,prompt_code=r.code,value=r.value))
     db.commit(); return {"saved":len(payload.responses)}
 @router.post("/modules/{module_id}/complete")
 def complete(module_id:int,db:Session=Depends(get_db),user=Depends(require_roles("worker"))):

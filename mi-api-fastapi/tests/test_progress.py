@@ -97,6 +97,32 @@ def test_admin_user_lifecycle(world, client_for):
     assert audit["total"] == 1 and audit["items"][0]["action"] == "USER_CREATED"
 
 
+def test_welcome_email_goes_only_to_new_managers_and_admins(world, client_for):
+    from conftest import WELCOME_OUTBOX
+    admin = client_for(world.adm)
+    for role, label in (("manager", "Gestor"), ("admin", "Administrador")):
+        r = admin.post(f"{API}/admin/users", json={"name": f"Nuevo {role}", "email": f"{role}.nuevo@x.pe", "area": "Finanzas", "role": role}, headers=csrf(admin))
+        assert r.status_code == 200 and r.json()["email_sent"] is True
+        sent = WELCOME_OUTBOX[-1]
+        assert sent["to"] == f"{role}.nuevo@x.pe" and sent["role_label"] == label
+        assert sent["temporary_password"] == r.json()["temporary_password"]
+    n = len(WELCOME_OUTBOX)
+    r = admin.post(f"{API}/admin/users", json={"name": "Trabajador", "email": "trab.nuevo@x.pe", "area": "Finanzas", "role": "worker"}, headers=csrf(admin))
+    assert r.status_code == 200 and r.json()["email_sent"] is False and len(WELCOME_OUTBOX) == n
+
+
+def test_user_is_created_even_if_welcome_email_fails(world, client_for, monkeypatch):
+    from app.api.routes import admin as admin_routes
+    from app.services.email_service import EmailDeliveryError
+
+    def boom(to, **kw): raise EmailDeliveryError("Fallo SMTP")
+    monkeypatch.setattr(admin_routes, "send_welcome_email", boom)
+    admin = client_for(world.adm)
+    r = admin.post(f"{API}/admin/users", json={"name": "Gestora", "email": "gestora@x.pe", "area": "Finanzas", "role": "manager"}, headers=csrf(admin))
+    assert r.status_code == 200 and r.json()["email_sent"] is False and r.json()["temporary_password"]
+    assert any(u["email"] == "gestora@x.pe" for u in admin.get(f"{API}/admin/users").json())
+
+
 def test_admin_areas(world, client_for):
     admin = client_for(world.adm)
     assert admin.post(f"{API}/admin/areas", json={"name": "Legal"}, headers=csrf(admin)).status_code == 201
@@ -110,7 +136,8 @@ def test_worker_saves_comb_diagnostic(world, client_for):
     payload = {"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 4}]}
     r = worker.post(f"{API}/worker/modules/{world.mods[0].id}/comb", json=payload, headers=csrf(worker))
     assert r.status_code == 200 and r.json() == {"saved": 1}
-    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "reinforcement_days": [7, 30, 90], "saved_reflections": {}}
+    assert worker.get(f"{API}/worker/modules/{world.mods[0].id}").json() == {"title": "m0", "capacity_questions": [], "reinforcement_days": [7, 30, 90],
+        "saved_reflections": {}, "saved_diagnostic": {"C1": 4}, "resume_step": 1}
 
 
 # ------------------------------------------------- módulo y reto del trabajador
@@ -174,6 +201,39 @@ def test_reflections_are_saved_once_per_question_and_returned(world, lesson, cli
     assert len(rows) == 1 and rows[0].text == "El tiempo y la costumbre"
     detail = worker.get(f"{API}/worker/modules/{lesson.id}").json()
     assert detail["saved_reflections"] == {"oportunidad": "El tiempo y la costumbre"}
+
+
+def test_comb_responses_are_updated_in_place_not_duplicated(world, client_for, db):
+    from app.models.models import CombResponse
+    worker = client_for(world.w1)
+    url = f"{API}/worker/modules/{world.mods[0].id}/comb"
+    payload = {"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 2}]}
+    assert worker.post(url, json=payload, headers=csrf(worker)).status_code == 200
+    payload["responses"][0]["value"] = 5                                     # el trabajador cambia de opinión
+    assert worker.post(url, json=payload, headers=csrf(worker)).status_code == 200
+    rows = db.scalars(select(CombResponse).where(CombResponse.module_id == world.mods[0].id, CombResponse.user_id == world.w1.id)).all()
+    assert len(rows) == 1 and rows[0].value == 5                             # no quedó una fila duplicada
+
+
+def test_resume_step_follows_what_is_actually_saved(world, client_for):
+    worker = client_for(world.w1)
+    module_id = world.mods[0].id
+    detail_url = f"{API}/worker/modules/{module_id}"
+
+    assert worker.get(detail_url).json()["resume_step"] == 0                 # primera vez
+
+    worker.post(f"{detail_url}/comb", json={"phase": "pre", "responses": [{"dimension": "capacidad", "code": "C1", "value": 3}]}, headers=csrf(worker))
+    body = worker.get(detail_url).json()
+    assert body["resume_step"] == 1 and body["saved_diagnostic"] == {"C1": 3}
+
+    worker.post(f"{detail_url}/reflections", json={"responses": [{"prompt_code": "oportunidad", "text": "El tiempo"}]}, headers=csrf(worker))
+    assert worker.get(detail_url).json()["resume_step"] == 4
+
+    worker.post(f"{detail_url}/reflections", json={"responses": [{"prompt_code": "motivacion", "text": "Mi familia"}]}, headers=csrf(worker))
+    assert worker.get(detail_url).json()["resume_step"] == 5
+
+    assert complete(worker, world.mods[0]).status_code == 200
+    assert worker.get(detail_url).json()["resume_step"] == 6                 # ya terminado
 
 
 def test_reflections_reject_unknown_prompts_and_huge_texts(world, lesson, client_for):

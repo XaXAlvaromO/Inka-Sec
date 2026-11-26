@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     bootstrap_company_name: str = "InkaSec"
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
+    # Superadministrador (la plataforma, no una empresa cliente). Opcional: si no se
+    # configura, python -m app.bootstrap_admin sigue funcionando igual que antes.
+    bootstrap_superadmin_email: str | None = None
+    bootstrap_superadmin_password: str | None = None
     # Envío del código 2FA (gestores y administradores). En producción nunca es "console".
     # brevo: API HTTP (funciona en Render gratuito). smtp: Gmail u otro servidor (local o plan pagado).
     email_backend: Literal["console", "smtp", "brevo"] = "console"

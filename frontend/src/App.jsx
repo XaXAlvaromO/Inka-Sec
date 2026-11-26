@@ -4,9 +4,10 @@ import InkaSecLayout, { Icon } from './InkaSecLayout';
 import { api } from './api';
 import { ADMIN_PATHS, adminViewFromPath } from './adminRoutes';
 import ParticleNetwork from './ParticleNetwork';
-import { EmptyState, Feedback, GenericPage, LoadingScreen, OptionsEditor, ProgressBar, STATUS_OPTIONS } from './ui';
+import { EmptyState, Feedback, GenericPage, LoadingScreen, Modal, OptionsEditor, ProgressBar, STATUS_OPTIONS } from './ui';
 import { ChallengeEditor, ChallengePlayer, KIND_LABEL } from './challenges';
 import { CertificateHomeCard, CertificatesPage, VerifyCertificatePage } from './certificates';
+import { SuperadminViews } from './superadmin';
 import './inka-sec.css';
 
 function StatCard({ item }) {
@@ -148,7 +149,7 @@ function LessonStepper({ step }) {
   );
 }
 
-function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis módulos' }) {
+export function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis módulos' }) {
   const [module, setModule] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [step, setStep] = useState(0);
@@ -167,6 +168,8 @@ function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis m
         if (!active) return;
         setModule(data);
         setReflections({ oportunidad: data.saved_reflections?.oportunidad || '', motivacion: data.saved_reflections?.motivacion || '' });
+        setDiagnostic(data.saved_diagnostic || {});
+        setStep(data.resume_step || 0);
       })
       .catch((err) => { if (active) setLoadError(err.message); });
     return () => { active = false; };
@@ -235,12 +238,18 @@ function ModulePlayer({ moduleId, onBack, onChanged, backLabel = 'Volver a mis m
   // Repetir la práctica vuelve a la microlección: así el segundo intento es repaso, no adivinar.
   function retryPractice() { setAnswers({}); setGrade(null); setError(''); setStep(1); }
 
+  // Volver un paso no borra lo ya escrito en esta sesión: solo cambia qué paso se muestra.
+  function stepBack() { setError(''); setStep((current) => Math.max(0, current - 1)); }
+
   const alert = error && <div className="form-error" role="alert">{error}</div>;
 
   return (
     <GenericPage eyebrow={module.topic} title={module.title} description={module.behavior_objective}>
       <article className="panel lesson-panel">
-        <button className="text-button" onClick={onBack}>← {backLabel}</button>
+        <div className="lesson-top-actions">
+          <button className="text-button" onClick={onBack}>← {backLabel}</button>
+          {step > 0 && step < 6 && <button className="text-button" onClick={stepBack}>← Paso anterior</button>}
+        </div>
 
         {step < 6 && <>
           <LessonStepper step={step}/>
@@ -761,11 +770,6 @@ function AdminViews({ data, view, onCreateUser, onCreateArea, onExport, onEditUs
   return <GenericPage eyebrow="INDICADORES" title="Reportes" description="Consulta indicadores registrados y exporta un archivo CSV.">{feedback}<section className="stats-grid"><StatCard item={{label:'Usuarios activos',value:data.report.active_users,helper:`De ${data.report.total_users} registrados`,icon:'users',tone:'blue'}}/><StatCard item={{label:'Avance registrado',value:data.report.average_progress == null ? '—' : `${data.report.average_progress}%`,helper:'Promedio de registros existentes',icon:'chart',tone:'green'}}/><StatCard item={{label:'Módulos completados',value:data.report.completed_modules,helper:'Registros con 100% de avance',icon:'book',tone:'blue'}}/><StatCard item={{label:'Áreas',value:data.report.areas.length,helper:'En esta empresa',icon:'layers',tone:'amber'}}/></section><article className="panel report-card"><div><span className="report-icon"><Icon name="report" size={28}/></span><h2>Reporte por área</h2><p>Incluye usuarios, usuarios activos, avance promedio registrado y módulos completados.</p></div><button className="btn btn-primary" onClick={onExport}>Exportar CSV</button></article><article className="panel admin-report-areas"><div className="panel-head"><div><span className="eyebrow">DESGLOSE</span><h2>Indicadores por área</h2></div></div><div className="table-wrap"><table><thead><tr><th>Área</th><th>Usuarios</th><th>Activos</th><th>Avance registrado</th><th>Módulos completados</th></tr></thead><tbody>{data.report.areas.map((area) => <tr key={area.id}><td><strong>{area.name}</strong></td><td>{area.users}</td><td>{area.active_users}</td><td>{area.average_progress == null ? 'Sin registros' : `${area.average_progress}%`}</td><td>{area.completed_modules}</td></tr>)}</tbody></table></div></article><p className="admin-hint">El avance promedio considera únicamente módulos con progreso registrado; no representa el cumplimiento de todas las asignaciones.</p></GenericPage>;
 }
 
-function Modal({ title, onClose, children }) {
-  useEffect(() => { const onKey = (e) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [onClose]);
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className="modal" role="dialog" aria-modal="true" aria-label={title}><div className="modal-head"><div><span className="eyebrow">INKASEC</span><h2>{title}</h2></div><button type="button" className="round-button" onClick={onClose}>×</button></div>{children}</div></div>;
-}
-
 const blankQuestion = () => ({ prompt: '', options: ['', ''], correct: 0, feedback: '' });
 const DEFAULT_OPPORTUNITY = '¿Qué te dificulta aplicar esto en tu trabajo?';
 const DEFAULT_MOTIVATION = '¿Por qué te importa este tema para tu trabajo?';
@@ -971,6 +975,7 @@ function AuthenticatedApp() {
     let active = true;
     async function load() {
       if (user.role === 'manager') return loadManagerPanel(activeView);
+      if (user.role === 'superadmin') return { companies: await api.superadmin.companies() };
       if (user.role !== 'admin') return api.worker.dashboard();
       if (activeView === 'inicio') return api.admin.dashboard();
       if (activeView === 'usuarios' || activeView === 'areas') {
@@ -1008,7 +1013,7 @@ function AuthenticatedApp() {
 
   if (loading) return <LoadingScreen/>;
   if (!user) return <LoginPage/>;
-  if (!['worker', 'manager', 'admin'].includes(user.role)) return <div className="fatal-state"><h1>Acceso no autorizado</h1><p>Tu cuenta no tiene un rol válido asignado.</p></div>;
+  if (!['worker', 'manager', 'admin', 'superadmin'].includes(user.role)) return <div className="fatal-state"><h1>Acceso no autorizado</h1><p>Tu cuenta no tiene un rol válido asignado.</p></div>;
 
   async function refreshAdmin(message) {
     setNotice({ type: 'success', message });
@@ -1027,7 +1032,7 @@ function AuthenticatedApp() {
     } catch (err) { setNotice({ type: 'error', message: err.message || 'No se pudo exportar el CSV.' }); }
   }
 
-  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={openModule ? `module-${openModule.id}` : view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)} openModule={openModule} onOpenModule={openWorkerModule} onCloseModule={closeWorkerModule}/>;
+  const content = error ? <div className="fatal-state inside"><h2>No pudimos cargar esta sección</h2><p>{error}</p><button className="btn btn-secondary" onClick={() => { setError(''); setReloadKey((value) => value + 1); }}>Reintentar</button></div> : !data || dataView !== activeView ? <div className="panel admin-loading" role="status">Cargando sección…</div> : user.role === 'admin' ? <AdminViews data={data} view={view} onCreateUser={() => setModal('user')} onCreateArea={() => setModal('area')} onExport={exportReport} onEditUser={(item) => setModal({ type: 'edit', user: item })} onDeleteUser={(item) => setModal({ type: 'delete', user: item })} currentUserId={user.id} notice={notice} auditPage={auditPage} setAuditPage={setAuditPage} auditQuery={auditQuery} setAuditQuery={setAuditQuery}/> : user.role === 'manager' ? <ManagerViews data={data} view={activeView} onNew={(kind) => setManagerEditor({ kind, id: null })} onEdit={(row) => setManagerEditor({ kind: row.kind, id: row.id })} onChanged={() => setReloadKey((value) => value + 1)}/> : user.role === 'superadmin' ? <SuperadminViews companies={data.companies} onChanged={() => setReloadKey((value) => value + 1)}/> : <WorkerViews key={openModule ? `module-${openModule.id}` : view} data={data} view={view} setView={navigate} onRefresh={() => setReloadKey((value) => value + 1)} openModule={openModule} onOpenModule={openWorkerModule} onCloseModule={closeWorkerModule}/>;
 
   return <InkaSecLayout activeView={navView} onViewChange={navigate} notifications={data?.notifications || []}><div className="inka-page-shell"><ErrorBoundary key={activeView}>{content}</ErrorBoundary></div>{managerEditor && <ManagerEditorModal kind={managerEditor.kind} id={managerEditor.id} topics={data?.topics || []} onClose={() => setManagerEditor(null)} onSaved={() => setReloadKey((value) => value + 1)}/>} {modal === 'user' && <AdminCreateUserModal onClose={() => setModal(null)} areas={data?.areas || []} onCreated={() => refreshAdmin('Usuario creado correctamente.')}/>} {modal === 'area' && <AdminCreateAreaModal onClose={() => setModal(null)} onCreated={() => refreshAdmin('Área creada correctamente.')}/>} {modal?.type === 'edit' && <AdminEditUserModal user={modal.user} currentUserId={user.id} onClose={() => setModal(null)} onSaved={() => refreshAdmin('Acceso actualizado correctamente.')}/>} {modal?.type === 'delete' && <AdminDeleteUserModal user={modal.user} onClose={() => setModal(null)} onDeleted={() => refreshAdmin('Usuario eliminado correctamente.')}/>}</InkaSecLayout>;
 }

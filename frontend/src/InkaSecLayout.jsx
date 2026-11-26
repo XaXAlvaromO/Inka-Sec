@@ -48,9 +48,12 @@ const NAV = {
     { id: 'auditoria', label: 'Auditoría', icon: 'audit' },
     { id: 'reportes', label: 'Reportes', icon: 'report' },
   ],
+  superadmin: [
+    { id: 'inicio', label: 'Empresas', icon: 'layers' },
+  ],
 };
 
-const ROLE_LABEL = { worker: 'Trabajador', manager: 'Gestor de contenido', admin: 'Administrador' };
+const ROLE_LABEL = { worker: 'Trabajador', manager: 'Gestor de contenido', admin: 'Administrador', superadmin: 'Superadministrador' };
 
 export default function InkaSecLayout({ activeView, onViewChange, notifications = [], children }) {
   const { user, logout } = useAuth();

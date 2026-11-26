@@ -38,8 +38,9 @@ Muchos incidentes en empresas peruanas (fraudes por correo, robo de cuentas, pé
 | **Trabajador** | Iniciar sesión, ver sus módulos y su avance, completar módulos (diagnóstico COM-B → microlección → preguntas → acción real), practicar retos de tres formatos tantas veces como quiera, ver sus temas débiles y obtener, renovar y descargar sus certificados por tema. |
 | **Gestor de contenido** (código 2FA al correo) | Crea y edita módulos y retos en lenguaje sencillo, organízalos por tema (catálogo y búsqueda), asígnalos a la empresa, un área o una persona con fecha límite, y revisa quién terminó sus módulos, quién practicó sus retos y cuántos certificados hay por tema. Los aciertos de los retos solo se ven agregados (3 o más personas): el reto entrena, no sanciona. |
 | **Administrador** (código 2FA al correo) | Crear, editar rol/estado, desactivar y eliminar usuarios; crear áreas; consultar la auditoría con búsqueda y paginación; ver indicadores por área y exportar el reporte en CSV. |
+| **Superadministrador** (código 2FA al correo) | Da de alta una empresa nueva junto con su primer administrador (nombre de la empresa, nombre y correo del administrador); ve todas las empresas con sus conteos de usuarios y administradores; puede desactivar o eliminar a cualquier usuario de cualquier empresa. Su propia cuenta nunca se puede desactivar, degradar ni eliminar, ni siquiera por otro superadministrador. |
 
-Cada empresa solo ve sus propios datos: todas las consultas se filtran por empresa (multiempresa).
+Cada empresa solo ve sus propios datos: todas las consultas se filtran por empresa (multiempresa). El administrador de una empresa sigue sin poder ver ni tocar las demás; solo el superadministrador ve todas a la vez.
 
 ## Arquitectura
 
@@ -83,14 +84,15 @@ Inka-Sec/
 ├── .github/workflows/ci.yml    # pruebas, SAST, build, auditoría y despliegue
 ├── frontend/                   # React + Vite
 │   └── src/
-│       ├── App.jsx             # vistas por rol (trabajador, gestor, administrador)
+│       ├── App.jsx             # vistas por rol (trabajador, gestor, administrador, superadministrador)
 │       ├── InkaSecLayout.jsx   # barra lateral, navegación y menú de usuario
 │       ├── AuthContext.jsx     # estado de sesión
 │       ├── challenges.jsx      # retos (rápido, por pasos, señales) y su editor
 │       ├── certificates.jsx    # certificados, renovación y verificación pública
+│       ├── superadmin.jsx      # panel del superadministrador: empresas y su equipo
 │       ├── ui.jsx              # piezas de interfaz compartidas
 │       ├── api.js              # cliente HTTP (cookies + cabecera CSRF)
-│       ├── __tests__/          # 67 pruebas de pantallas (Vitest + Testing Library)
+│       ├── __tests__/          # 80 pruebas de pantallas (Vitest + Testing Library)
 │       └── test/               # preparación de las pruebas y datos de ejemplo
 └── mi-api-fastapi/             # API FastAPI
     ├── .env.example            # plantilla de configuración de la API
@@ -100,7 +102,7 @@ Inka-Sec/
     ├── app/
     │   ├── main.py             # creación de la app y middlewares
     │   ├── core/               # configuración, seguridad, middlewares, dependencias RBAC
-    │   ├── api/routes/         # auth, worker, manager, admin, health, certificates
+    │   ├── api/routes/         # auth, worker, manager, admin, superadmin, health, certificates
     │   ├── services/           # lógica de negocio (auth, progreso, dashboards, auditoría)
     │   ├── repositories/       # consultas a la base de datos
     │   ├── models/             # tablas SQLAlchemy
@@ -108,9 +110,9 @@ Inka-Sec/
     │   ├── data/               # 7 módulos COM-B de ejemplo
     │   ├── seed.py             # datos demo (solo desarrollo)
     │   ├── dev_seed_challenges.py  # crea los retos demo del trabajador (solo desarrollo)
-    │   ├── bootstrap_admin.py  # crea el primer administrador real
+    │   ├── bootstrap_admin.py  # crea el primer administrador real y, si se configura, el superadministrador
     │   └── worker.py           # depura auditoría con más de AUDIT_RETENTION_DAYS
-    └── tests/                  # 132 pruebas: funcionales y simulaciones de ataque
+    └── tests/                  # 155 pruebas: funcionales y simulaciones de ataque
 ```
 
 ## Inicio rápido
@@ -164,10 +166,20 @@ Con `SEED_DEMO_DATA=true` la API crea al arrancar la empresa demo, 7 módulos y 
 | Trabajador | `trabajador@inkasec.pe` | No |
 | Gestor | `gestor@inkasec.pe` | Código por correo |
 | Administrador | `admin@inkasec.pe` | Código por correo |
+| Superadministrador | `superadmin@inkasec.pe` | Código por correo |
 
 Gestores y administradores reciben un código de 6 dígitos al iniciar sesión. Con `EMAIL_BACKEND=console` (valor por defecto en local) el código aparece en la terminal de la API, así puedes probar sin enviar correos. Para recibirlo en un Gmail real, usa `EMAIL_BACKEND=smtp` (ver abajo).
 
 Los 4 retos de ejemplo (dos rápidos, uno por pasos y uno de señales) se crean con el seed demo (`SEED_DEMO_DATA=true`); con esa opción activa, los que falten se agregan al reiniciar la API. Si ya tienes la base de datos, `python -m app.dev_seed_challenges` los agrega sin duplicar (o con `docker compose exec backend ...`).
+
+Fuera del seed demo, toda empresa nueva recibe el mismo contenido inicial automáticamente: cuando el administrador crea a su primer gestor, si la empresa todavía no tiene ningún módulo ni reto propio, se precargan los 7 módulos COM-B de ejemplo y los 4 retos de demostración, ya publicados (ver `app/services/starter_content.py`). Así ningún gestor empieza de cero y los trabajadores tienen algo que hacer desde el primer día.
+
+## Módulos: el paso a paso del trabajador
+
+Cada módulo se cursa en 7 pasos (Diagnóstico → Microlección → Práctica → Oportunidad → Motivación → Acción → Completado). Dos cosas se guardan en la API, no solo en el navegador, para que no se pierdan si el trabajador cierra la pestaña o cambia de dispositivo:
+
+- **Volver un paso:** dentro de un módulo abierto hay un botón «← Paso anterior» que no borra nada de lo ya escrito en esa sesión, solo cambia qué paso se muestra.
+- **Retomar donde quedó:** si el trabajador sale de un módulo a medio empezar y vuelve después (incluso en otra sesión), la API le indica en qué paso retomar a partir de lo que ya guardó (diagnóstico, reflexiones, práctica), y se lo muestra con sus respuestas anteriores ya puestas.
 
 ## Retos y certificados
 
@@ -205,6 +217,7 @@ Los archivos `.env` **nunca se suben a git**. Se crean a partir de las plantilla
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | Servidor SMTP con STARTTLS. Gmail: `smtp.gmail.com`, puerto `587`, y una contraseña de aplicación de Google. | vacío / `587` |
 | `BREVO_API_KEY` | Clave de la API de Brevo (`EMAIL_BACKEND=brevo`). | vacío |
 | `BOOTSTRAP_ADMIN_*` | Primer administrador real (`python -m app.bootstrap_admin`). Correo al que tengas acceso y contraseña de ≥ 12 caracteres. | vacío |
+| `BOOTSTRAP_SUPERADMIN_*` | Opcional, mismo script. Crea la cuenta de superadministrador (dueña de toda la plataforma, no de una empresa) en su propia empresa interna, separada de las empresas cliente. Mismas reglas de correo y contraseña que `BOOTSTRAP_ADMIN_*`. | vacío |
 
 ## Pruebas y análisis de seguridad
 
@@ -221,12 +234,12 @@ Agrega `--build` la primera vez y cada vez que cambien `requirements*.txt` o `pa
 
 ```bash
 cd mi-api-fastapi
-python -m pytest -q --cov=app --cov-report=term-missing   # 132 pruebas + cobertura
+python -m pytest -q --cov=app --cov-report=term-missing   # 155 pruebas + cobertura
 bandit -r app -ll -ii                                     # análisis estático (SAST)
 
 cd ../frontend
 npm run lint                   # oxlint
-npm run test:coverage          # 67 pruebas de pantallas (Vitest + Testing Library) + cobertura
+npm run test:coverage          # 80 pruebas de pantallas (Vitest + Testing Library) + cobertura
 npm run build                  # compilación de producción
 npm audit --omit=dev           # dependencias vulnerables (SCA)
 ```
@@ -244,7 +257,8 @@ Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/c
 - `tests/test_progress.py`: reglas de progreso, retos y paneles por rol.
 - `tests/test_certificates.py`: regla del 80 %, vigencia, renovación, PDF y verificación pública.
 - `tests/test_challenge_formats.py`: retos por pasos y de señales, y columnas nuevas en bases existentes.
-- `frontend/src/__tests__/`: pruebas de pantallas con datos reales de la API: inicio de sesión y 2FA, navegación del trabajador, los tres formatos de reto, certificados y verificación, panel del gestor, panel del administrador y el cliente de la API.
+- `tests/test_superadmin.py`: alta de empresas con su administrador, aislamiento entre empresas, y que la cuenta de superadministrador nunca se pueda desactivar, degradar ni eliminar.
+- `frontend/src/__tests__/`: pruebas de pantallas con datos reales de la API: inicio de sesión y 2FA, navegación del trabajador, los tres formatos de reto, certificados y verificación, panel del gestor, panel del administrador, panel del superadministrador y el cliente de la API.
 - `tests/test_security.py`: **simulaciones de ataque**. Incluyen:
   - fuerza bruta de contraseña y de 2FA;
   - IP falsificada en `X-Forwarded-For`;
@@ -265,6 +279,7 @@ Las pruebas usan una base SQLite en memoria y su propia configuración (`tests/c
 | CSRF | Patrón *double submit cookie* en todo POST/PATCH/DELETE | `test_state_changes_require_matching_csrf_token` |
 | Escalamiento de privilegios | RBAC verificado en cada ruta (HTTP 403) | `test_each_role_only_reaches_its_own_routes` |
 | Acceso a otra empresa (IDOR) | Toda consulta filtra por `company_id` (HTTP 404) | `test_admin_cannot_touch_users_of_another_company` |
+| Cuenta privilegiada eliminada o degradada | La cuenta de superadministrador no se puede desactivar, cambiar de rol ni eliminar, ni por otro superadministrador ni por sí misma | `test_superadmin_account_can_never_be_demoted_deactivated_or_deleted` |
 | Enumeración de usuarios | Misma respuesta y mismo costo de hash para correos inexistentes | `test_unknown_email_still_pays_the_hashing_cost` |
 | Inyección SQL | Consultas parametrizadas con SQLAlchemy | `test_sql_injection_in_audit_search_is_inert` |
 | Inyección de fórmulas en CSV | Celdas que empiezan con `= + - @` se exportan como texto | `test_csv_formula_injection_is_neutralized` |
@@ -298,6 +313,11 @@ El archivo `render.yaml` describe tres servicios: la API (Docker), el frontend (
    BOOTSTRAP_ADMIN_EMAIL=tu.correo@gmail.com BOOTSTRAP_ADMIN_PASSWORD='una-clave-de-12-o-mas' python -m app.bootstrap_admin
    ```
    Luego inicia sesión en la web: el código 2FA llega a ese correo.
+4. (Opcional) Si quieres tu propia cuenta de superadministrador para crear empresas desde la plataforma, en la misma consola:
+   ```bash
+   BOOTSTRAP_SUPERADMIN_EMAIL=tu.correo@gmail.com BOOTSTRAP_SUPERADMIN_PASSWORD='otra-clave-de-12-o-mas' python -m app.bootstrap_admin
+   ```
+   Queda en su propia empresa interna, separada de las empresas que crees después.
 
 > **Importante:** el plan gratuito de Render bloquea el SMTP saliente (puertos 25, 465 y 587), por eso el correo se envía por la API HTTP de Brevo. Las bases de datos gratuitas caducan a los 30 días y los servicios gratuitos se duermen tras 15 minutos sin uso (la primera carga tarda unos segundos).
 
@@ -324,6 +344,9 @@ Prefijo: `/api/v1`. Autenticación por cookie; los métodos que modifican datos 
 | GET · POST · PATCH · DELETE | `/admin/users` · `/admin/users/{id}` | Administrador |
 | GET · POST | `/admin/areas` | Administrador |
 | GET | `/admin/dashboard` · `/admin/audit` · `/admin/reports/summary` · `/admin/reports/export` | Administrador |
+| GET · POST | `/superadmin/companies` | Superadministrador |
+| GET | `/superadmin/companies/{id}/users` | Superadministrador |
+| PATCH · DELETE | `/superadmin/users/{id}` | Superadministrador |
 
 El detalle de cada ruta está en http://localhost:8001/docs mientras corre la API en desarrollo.
 
@@ -332,10 +355,10 @@ El detalle de cada ruta está en http://localhost:8001/docs mientras corre la AP
 | Requerimiento | Estado |
 |---|---|
 | RF-01 Acceso con roles y 2FA por correo | ✅ Implementado |
-| RF-02 Gestión de usuarios y áreas, auditoría | ✅ Implementado (edición limitada a rol y estado) |
-| RF-03 Gestión de contenidos | ✅ Implementado: módulos y retos en lenguaje sencillo, temas del catálogo, búsqueda, borrador/publicado/archivado |
+| RF-02 Gestión de usuarios y áreas, auditoría | ✅ Implementado (edición limitada a rol y estado); con superadministrador que crea empresas y administradores, cada uno aislado a su propia empresa |
+| RF-03 Gestión de contenidos | ✅ Implementado: módulos y retos en lenguaje sencillo, temas del catálogo, búsqueda, borrador/publicado/archivado; toda empresa nueva recibe módulos y retos de ejemplo ya publicados al crear su primer gestor |
 | RF-04 Asignaciones, plazos y notificaciones | 🟡 Parcial: asignación a empresa, área o persona con fecha límite; falta notificar por correo |
-| RF-05 Evaluación con retos y retroalimentación | ✅ Implementado: tres formatos (rápido, por pasos, encuentra las señales), práctica sin límite, calificación en la API y explicación en cada intento |
+| RF-05 Evaluación con retos y retroalimentación | ✅ Implementado: tres formatos (rápido, por pasos, encuentra las señales), práctica sin límite, calificación en la API, explicación en cada intento y, en el formato por pasos, botón para volver a un paso anterior |
 | RF-06 Seguimiento, estadísticas y reportes | ✅ Implementado (errores agrupados por tema) |
 | RF-07 Certificados | ✅ Implementado: uno por tema (80 % en cada módulo), vigencia de 12 meses, renovación con repaso, PDF y verificación pública |
 

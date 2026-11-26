@@ -20,7 +20,7 @@ from app.core.security import hash_email_code
 from app.services import auth_service
 from app.services.email_service import EmailDeliveryError, mask_email
 from app.main import app
-from app.models.models import Area, AuditLog, AuthChallenge, CombResponse, User
+from app.models.models import Area, AuditLog, AuthChallenge, CombResponse, Company, User
 from conftest import API, OUTBOX, code_for, csrf, start_login, wrong_code
 
 UNKNOWN = "nadie@x.pe"
@@ -295,12 +295,12 @@ def test_state_changes_require_matching_csrf_token(world, client_for, header):
 ROLE_MATRIX = [
     ("GET", "/admin/dashboard"), ("GET", "/admin/users"), ("GET", "/admin/audit"), ("GET", "/admin/reports/export"),
     ("POST", "/admin/areas"), ("GET", "/manager/dashboard"), ("POST", "/manager/modules"),
-    ("GET", "/worker/dashboard"),
+    ("GET", "/worker/dashboard"), ("GET", "/superadmin/companies"), ("POST", "/superadmin/companies"),
 ]
-ALLOWED_PREFIX = {"w1": "/worker", "mgr": "/manager", "adm": "/admin"}
+ALLOWED_PREFIX = {"w1": "/worker", "mgr": "/manager", "adm": "/admin", "super": "/superadmin"}
 
 
-@pytest.mark.parametrize("who", ["w1", "mgr", "adm"])
+@pytest.mark.parametrize("who", ["w1", "mgr", "adm", "super"])
 def test_each_role_only_reaches_its_own_routes(world, client_for, who):
     client = client_for(getattr(world, who))
     for method, path in ROLE_MATRIX:
@@ -505,6 +505,39 @@ def test_bootstrap_admin_accepts_strong_settings(monkeypatch):
     bootstrap_admin.validate_bootstrap_settings()
 
 
+def test_bootstrap_superadmin_is_optional_when_not_configured(db):
+    # Sin BOOTSTRAP_SUPERADMIN_EMAIL/PASSWORD (el valor por defecto), no crea nada ni falla:
+    # una instalación existente puede seguir arrancando sin superadministrador.
+    bootstrap_admin._bootstrap_superadmin(db)
+    assert db.scalar(select(User).where(User.role == "superadmin")) is None
+
+
+@pytest.mark.parametrize("password,message", [
+    ("corta", "al menos 12"),
+    ("", "BOOTSTRAP_SUPERADMIN_PASSWORD"),
+])
+def test_bootstrap_superadmin_rejects_weak_settings(monkeypatch, db, password, message):
+    monkeypatch.setattr(settings, "bootstrap_superadmin_email", "super@inkasec.pe")
+    monkeypatch.setattr(settings, "bootstrap_superadmin_password", password)
+    with pytest.raises(SystemExit, match=message):
+        bootstrap_admin._bootstrap_superadmin(db)
+
+
+def test_bootstrap_superadmin_creates_account_in_its_own_platform_company(monkeypatch, db):
+    from app.core.constants import PLATFORM_COMPANY_SLUG
+    monkeypatch.setattr(settings, "bootstrap_superadmin_email", "super@inkasec.pe")
+    monkeypatch.setattr(settings, "bootstrap_superadmin_password", "una-clave-bien-larga")
+    bootstrap_admin._bootstrap_superadmin(db)
+    superadmin = db.scalar(select(User).where(User.email == "super@inkasec.pe"))
+    assert superadmin.role == "superadmin" and superadmin.area_id is None
+    company = db.get(Company, superadmin.company_id)
+    assert company.slug == PLATFORM_COMPANY_SLUG
+
+    # Si se ejecuta de nuevo (por ejemplo, un redeploy), no se duplica.
+    bootstrap_admin._bootstrap_superadmin(db)
+    assert len(db.scalars(select(User).where(User.email == "super@inkasec.pe")).all()) == 1
+
+
 # ------------------------------------------------------------------ correo 2FA
 
 def test_console_email_backend_is_refused_in_production(monkeypatch):
@@ -568,6 +601,31 @@ def test_brevo_sender_posts_the_code_and_rejects_error_responses(monkeypatch):
     with pytest.raises(EmailDeliveryError) as info:
         email_service.send_login_code("gestor@empresa.pe", "482913")
     assert "401" in str(info.value) and "482913" not in str(info.value)
+
+
+def test_welcome_email_contains_credentials_and_login_link(monkeypatch):
+    from app.services import email_service
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def starttls(self, context): pass
+        def login(self, user, password): pass
+        def send_message(self, message): sent["subject"] = message["Subject"]; sent["to"] = message["To"]; sent["body"] = message.get_content()
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(settings, "email_backend", "smtp")
+    monkeypatch.setattr(settings, "email_from", "inkasec@gmail.com")
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_username", "inkasec@gmail.com")
+    monkeypatch.setattr(settings, "smtp_password", "clave-app")
+    monkeypatch.setattr(settings, "frontend_origin", "https://inkasec.example.pe/")
+    email_service.send_welcome_email("gestor@empresa.pe", name="Rosa", role_label="Gestor", temporary_password="Temp-123")
+    assert sent["to"] == "gestor@empresa.pe" and sent["subject"] == email_service.WELCOME_SUBJECT
+    assert "Rosa" in sent["body"] and "Gestor" in sent["body"] and "Temp-123" in sent["body"]
+    assert "https://inkasec.example.pe\n" in sent["body"] and "clave-app" not in sent["body"]
 
 
 def test_masked_email_hides_most_of_the_address():

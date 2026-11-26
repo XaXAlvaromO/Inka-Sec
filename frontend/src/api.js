@@ -125,4 +125,12 @@ export const api = {
       return response.blob();
     },
   },
+
+  superadmin: {
+    companies: () => request('/superadmin/companies'),
+    createCompany: (payload) => request('/superadmin/companies', { method: 'POST', body: payload }),
+    companyUsers: (id) => request(`/superadmin/companies/${encodeURIComponent(id)}/users`),
+    updateUser: (id, payload) => request(`/superadmin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: payload }),
+    deleteUser: (id) => request(`/superadmin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  },
 };
